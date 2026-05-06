@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #1e1e1e; font-family: -apple-system, 'Segoe UI', sans-serif; font-size: 13px; color: #cccccc; width: 860px; height: 480px; overflow: hidden; display: flex; flex-direction: column; }
+
+  /* Editor background */
+  .editor-bg { flex: 1; background: #1e1e1e; display: flex; flex-direction: column; position: relative; }
+
+  /* Blurred editor content */
+  .editor-content { flex: 1; padding: 14px 50px; line-height: 20px; font-family: 'SF Mono', 'Cascadia Code', monospace; font-size: 13px; opacity: 0.3; filter: blur(1px); }
+
+  /* Quick-pick overlay */
+  .overlay { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.4); display: flex; justify-content: center; align-items: flex-start; padding-top: 60px; }
+
+  .quickpick { background: #252526; border: 1px solid #454545; border-radius: 6px; width: 580px; box-shadow: 0 12px 40px rgba(0,0,0,0.6); overflow: hidden; }
+
+  .qp-header { padding: 10px 14px 6px; border-bottom: 1px solid #3c3c3c; }
+  .qp-label { font-size: 11px; color: #9d9d9d; margin-bottom: 6px; }
+  .qp-input-row { display: flex; align-items: center; gap: 8px; background: #3c3c3c; border: 1px solid #007acc; border-radius: 3px; padding: 6px 10px; }
+  .qp-icon { color: #888; font-size: 14px; }
+  .qp-input { flex: 1; background: transparent; border: none; color: #d4d4d4; font-size: 13px; outline: none; }
+  .qp-cursor { display: inline-block; width: 1px; height: 14px; background: #d4d4d4; animation: blink 1s step-end infinite; vertical-align: middle; margin-left: 1px; }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  .qp-body { padding: 6px 0; max-height: 200px; overflow-y: auto; }
+  .qp-placeholder { padding: 12px 16px; color: #666; font-size: 12px; font-style: italic; }
+
+  .qp-example { padding: 10px 16px; }
+  .qp-example-title { font-size: 11px; color: #666; margin-bottom: 8px; letter-spacing: 0.05em; text-transform: uppercase; }
+  .example-chip { display: inline-block; background: #3c3c3c; border: 1px solid #555; border-radius: 3px; padding: 3px 8px; font-size: 11px; color: #9d9d9d; margin: 3px; cursor: pointer; }
+  .example-chip:hover { background: #484848; color: #ccc; }
+
+  .qp-footer { border-top: 1px solid #3c3c3c; padding: 6px 14px; display: flex; gap: 12px; font-size: 11px; color: #555; }
+  .kbd { background: #3c3c3c; border: 1px solid #555; border-radius: 3px; padding: 1px 5px; font-family: monospace; color: #888; }
+
+  /* Status bar */
+  .status-bar { height: 22px; background: #007acc; display: flex; align-items: center; padding: 0 10px; font-size: 12px; color: white; gap: 12px; }
+  .status-right { margin-left: auto; display: flex; gap: 12px; }
+</style>
+</head>
+<body>
+  <div class="editor-bg">
+    <div class="editor-content">
+      <span style="color:#569cd6;">// src/index.ts</span><br>
+      <span style="color:#c586c0;">import</span> <span style="color:#9cdcfe;">express</span> <span style="color:#c586c0;">from</span> <span style="color:#ce9178;">'express'</span>;<br>
+      <br>
+      <span style="color:#c586c0;">const</span> <span style="color:#9cdcfe;">app</span> = <span style="color:#dcdcaa;">express</span>();<br>
+      <span style="color:#9cdcfe;">app</span>.<span style="color:#dcdcaa;">use</span>(<span style="color:#dcdcaa;">express</span>.<span style="color:#dcdcaa;">json</span>());<br>
+      <br>
+      <span style="color:#9cdcfe;">app</span>.<span style="color:#dcdcaa;">listen</span>(<span style="color:#b5cea8;">3000</span>, () => {<br>
+      &nbsp;&nbsp;<span style="color:#9cdcfe;">console</span>.<span style="color:#dcdcaa;">log</span>(<span style="color:#ce9178;">'Server running'</span>);<br>
+      });
+    </div>
+
+    <div class="overlay">
+      <div class="quickpick">
+        <div class="qp-header">
+          <div class="qp-label">Kosmo: Describe what you want to build</div>
+          <div class="qp-input-row">
+            <span class="qp-icon">✦</span>
+            <input class="qp-input" value="Add rate limiting to the REST API using Redis sliding window" readonly>
+            <span class="qp-cursor"></span>
+          </div>
+        </div>
+        <div class="qp-body">
+          <div class="qp-example">
+            <div class="qp-example-title">Examples</div>
+            <span class="example-chip">User authentication with JWT</span>
+            <span class="example-chip">CSV data export endpoint</span>
+            <span class="example-chip">WebSocket notifications</span>
+            <span class="example-chip">File upload with S3</span>
+          </div>
+        </div>
+        <div class="qp-footer">
+          <span><span class="kbd">Enter</span> Generate spec</span>
+          <span><span class="kbd">Esc</span> Cancel</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="status-bar">
+    <span>⎇ main</span>
+    <span>⊘ 0  ⚠ 0</span>
+    <div class="status-right">
+      <span>TypeScript</span>
+      <span>UTF-8</span>
+    </div>
+  </div>
+</body>
+</html>

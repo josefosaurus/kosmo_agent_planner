@@ -3,16 +3,38 @@
   "displayName": "Kosmo Sidekick",
   "description": "Spec-driven development with Claude Code CLI",
   "version": "0.0.1",
-  "engines": { "vscode": "^1.75.0" },
-  "categories": ["Other"],
-  "activationEvents": ["onStartupFinished"],
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
-      { "command": "kosmo.newSpec", "title": "Kosmo: New Spec", "icon": "$(add)" },
-      { "command": "kosmo.startTask", "title": "Kosmo: Start Task", "icon": "$(play)" },
-      { "command": "kosmo.killTask", "title": "Kosmo: Kill Task", "icon": "$(debug-stop)" },
-      { "command": "kosmo.refreshTasks", "title": "Kosmo: Refresh Tasks", "icon": "$(refresh)" }
+      {
+        "command": "kosmo.newSpec",
+        "title": "Kosmo: New Spec",
+        "icon": "$(add)"
+      },
+      {
+        "command": "kosmo.startTask",
+        "title": "Kosmo: Start Task",
+        "icon": "$(play)"
+      },
+      {
+        "command": "kosmo.killTask",
+        "title": "Kosmo: Kill Task",
+        "icon": "$(debug-stop)"
+      },
+      {
+        "command": "kosmo.refreshTasks",
+        "title": "Kosmo: Refresh Tasks",
+        "icon": "$(refresh)"
+      }
     ],
     "views": {
       "explorer": [
@@ -26,8 +48,16 @@
     },
     "menus": {
       "view/title": [
-        { "command": "kosmo.newSpec", "when": "view == kosmoTasks", "group": "navigation@1" },
-        { "command": "kosmo.refreshTasks", "when": "view == kosmoTasks", "group": "navigation@2" }
+        {
+          "command": "kosmo.newSpec",
+          "when": "view == kosmoTasks",
+          "group": "navigation@1"
+        },
+        {
+          "command": "kosmo.refreshTasks",
+          "when": "view == kosmoTasks",
+          "group": "navigation@2"
+        }
       ],
       "view/item/context": [
         {
@@ -55,6 +85,7 @@
     "@typescript-eslint/eslint-plugin": "^6.0.0",
     "@typescript-eslint/parser": "^6.0.0",
     "eslint": "^8.0.0",
+    "playwright": "^1.59.1",
     "typescript": "^5.0.0"
   }
 }

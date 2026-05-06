@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #1e1e1e; font-family: -apple-system, 'Segoe UI', sans-serif; font-size: 13px; color: #cccccc; display: flex; width: 900px; height: 580px; overflow: hidden; }
+
+  /* Activity bar */
+  .activity-bar { width: 48px; background: #333333; display: flex; flex-direction: column; align-items: center; padding-top: 8px; gap: 0; }
+  .activity-icon { width: 48px; height: 48px; display: flex; align-items: center; justify-content: center; color: #858585; font-size: 22px; cursor: pointer; position: relative; }
+  .activity-icon.active { color: #cccccc; }
+  .activity-icon.active::before { content: ''; position: absolute; left: 0; top: 8px; bottom: 8px; width: 2px; background: #cccccc; }
+
+  /* Sidebar */
+  .sidebar { width: 240px; background: #252526; border-right: 1px solid #3c3c3c; display: flex; flex-direction: column; }
+  .sidebar-title { padding: 8px 12px; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; color: #bbb; text-transform: uppercase; border-bottom: 1px solid #3c3c3c; }
+  .sidebar-section { flex: 1; overflow: hidden; }
+  .section-header { display: flex; align-items: center; justify-content: space-between; padding: 4px 8px 4px 12px; color: #bbb; font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; cursor: pointer; }
+  .section-header:hover { background: #2a2d2e; }
+  .section-actions { display: flex; gap: 2px; }
+  .icon-btn { width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; border-radius: 3px; color: #bbb; font-size: 14px; cursor: pointer; border: none; background: none; }
+  .icon-btn:hover { background: #3c3f41; color: #ddd; }
+
+  /* Tree */
+  .tree { padding: 2px 0; }
+  .spec-group { display: flex; align-items: center; gap: 6px; padding: 3px 8px 3px 12px; color: #ccc; cursor: pointer; }
+  .spec-group:hover { background: #2a2d2e; }
+  .spec-group .chevron { font-size: 10px; color: #888; }
+  .spec-group .folder-icon { color: #e8c87c; font-size: 14px; }
+  .spec-group .name { font-size: 13px; }
+
+  .task-item { display: flex; align-items: center; gap: 6px; padding: 3px 8px 3px 36px; cursor: pointer; position: relative; }
+  .task-item:hover { background: #2a2d2e; }
+  .task-item:hover .task-action { opacity: 1; }
+  .task-item.selected { background: #094771; }
+  .task-icon { font-size: 14px; }
+  .task-icon.pending { color: #6c6c6c; }
+  .task-icon.done { color: #4ec994; }
+  .task-icon.inprogress { color: #f0c040; }
+  .task-label { font-size: 12px; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .task-label.done { color: #888; text-decoration: line-through; }
+  .task-label.inprogress { color: #e8c87c; }
+  .task-action { position: absolute; right: 6px; opacity: 0; }
+
+  /* Editor area */
+  .editor-area { flex: 1; display: flex; flex-direction: column; background: #1e1e1e; }
+  .tabs { background: #2d2d2d; display: flex; border-bottom: 1px solid #1e1e1e; }
+  .tab { padding: 8px 20px; font-size: 13px; color: #969696; border-right: 1px solid #1e1e1e; cursor: pointer; display: flex; align-items: center; gap: 8px; }
+  .tab.active { background: #1e1e1e; color: #ffffff; border-top: 1px solid #0078d4; }
+  .tab .close { opacity: 0; font-size: 11px; }
+  .tab:hover .close { opacity: 1; }
+
+  .editor { flex: 1; overflow: hidden; position: relative; }
+  .line-numbers { position: absolute; left: 0; top: 0; width: 40px; text-align: right; color: #4e4e4e; padding: 14px 8px; line-height: 20px; font-size: 12px; font-family: 'SF Mono', 'Cascadia Code', monospace; user-select: none; }
+  .code-area { position: absolute; left: 44px; top: 0; right: 0; padding: 14px 8px; line-height: 20px; font-size: 13px; font-family: 'SF Mono', 'Cascadia Code', monospace; }
+
+  .codelens { color: #999; font-size: 11px; cursor: pointer; display: block; margin-bottom: 1px; }
+  .codelens span { color: #569cd6; text-decoration: underline; }
+  .codelens span:hover { color: #9cdcfe; }
+
+  .md-h1 { color: #569cd6; font-weight: bold; }
+  .md-h2 { color: #4ec9b0; font-weight: bold; }
+  .md-cb-pending { color: #6c6c6c; }
+  .md-cb-done { color: #4ec994; }
+  .md-cb-inprog { color: #f0c040; }
+  .md-detail { color: #888; }
+  .md-req { color: #c586c0; font-style: italic; }
+  .md-text { color: #d4d4d4; }
+
+  /* Status bar */
+  .status-bar { height: 22px; background: #007acc; display: flex; align-items: center; padding: 0 10px; font-size: 12px; color: white; gap: 12px; }
+  .status-left { display: flex; gap: 12px; }
+  .status-right { margin-left: auto; display: flex; gap: 12px; }
+
+  /* Input box */
+  .input-overlay { position: fixed; top: 80px; left: 50%; transform: translateX(-50%); background: #3c3c3c; border: 1px solid #6c6c6c; border-radius: 4px; width: 520px; box-shadow: 0 8px 24px rgba(0,0,0,.5); z-index: 100; }
+  .input-title { padding: 6px 12px; font-size: 11px; color: #ccc; border-bottom: 1px solid #555; }
+  .input-field { padding: 8px 12px; display: flex; align-items: center; gap: 8px; }
+  .input-text { flex: 1; background: #3c3c3c; border: none; color: #ccc; font-size: 13px; outline: none; }
+</style>
+</head>
+<body>
+  <!-- Activity bar -->
+  <div class="activity-bar">
+    <div class="activity-icon">&#xE006;</div>
+    <div class="activity-icon active">&#x2750;</div>
+    <div class="activity-icon">&#xE000;</div>
+    <div class="activity-icon">&#x26A0;</div>
+  </div>
+
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <div class="sidebar-title">Explorer</div>
+    <div class="sidebar-section">
+      <div class="section-header">
+        <span>Kosmo Tasks</span>
+        <div class="section-actions">
+          <button class="icon-btn" title="New Spec">+</button>
+          <button class="icon-btn" title="Refresh">↻</button>
+        </div>
+      </div>
+      <div class="tree">
+        <!-- Spec: user-auth -->
+        <div class="spec-group">
+          <span class="chevron">▾</span>
+          <span class="folder-icon">📁</span>
+          <span class="name">user-auth</span>
+        </div>
+        <div class="task-item">
+          <span class="task-icon done">✅</span>
+          <span class="task-label done">1. Scaffold project structure</span>
+        </div>
+        <div class="task-item">
+          <span class="task-icon done">✅</span>
+          <span class="task-label done">2. JWT token generation</span>
+        </div>
+        <div class="task-item selected">
+          <span class="task-icon inprogress">⏳</span>
+          <span class="task-label inprogress">3. Refresh token rotation</span>
+          <div class="task-action">⏹</div>
+        </div>
+        <div class="task-item">
+          <span class="task-icon pending">○</span>
+          <span class="task-label">4. Rate limiting middleware</span>
+          <div class="task-action">▶</div>
+        </div>
+        <div class="task-item">
+          <span class="task-icon pending">○</span>
+          <span class="task-label">5. Integration tests</span>
+          <div class="task-action">▶</div>
+        </div>
+
+        <!-- Spec: data-export -->
+        <div class="spec-group" style="margin-top:4px">
+          <span class="chevron">▾</span>
+          <span class="folder-icon">📁</span>
+          <span class="name">data-export</span>
+        </div>
+        <div class="task-item">
+          <span class="task-icon pending">○</span>
+          <span class="task-label">1. CSV serializer</span>
+          <div class="task-action">▶</div>
+        </div>
+        <div class="task-item">
+          <span class="task-icon pending">○</span>
+          <span class="task-label">2. Streaming download handler</span>
+          <div class="task-action">▶</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Editor -->
+  <div class="editor-area">
+    <div class="tabs">
+      <div class="tab active"><span>tasks.md</span><span class="close">✕</span></div>
+      <div class="tab"><span>requirements.md</span><span class="close">✕</span></div>
+      <div class="tab"><span>design.md</span><span class="close">✕</span></div>
+    </div>
+    <div class="editor">
+      <div class="line-numbers">
+        1<br>2<br>3<br>4<br>5<br>6<br>7<br>8<br>9<br>10<br>11<br>12<br>13<br>14<br>15<br>16<br>17<br>18<br>19<br>20<br>21<br>22<br>23<br>24<br>25<br>26<br>27
+      </div>
+      <div class="code-area">
+        <span class="md-h1"># User Authentication</span><br>
+        <br>
+        <span class="md-h2">## Overview</span><br>
+        <span class="md-text">Implement JWT-based auth with refresh token rotation.</span><br>
+        <br>
+        <span class="md-h2">## Tasks</span><br>
+        <br>
+        <span class="md-cb-done">- [x] 1. Scaffold project structure</span><br>
+        <span class="md-detail">&nbsp;&nbsp;- Create src/auth directory with index.ts entry</span><br>
+        <span class="md-req">&nbsp;&nbsp;- _Requirements: 1.1, 1.2_</span><br>
+        <br>
+        <span class="md-cb-done">- [x] 2. JWT token generation</span><br>
+        <span class="md-detail">&nbsp;&nbsp;- Implement sign/verify with RS256</span><br>
+        <span class="md-req">&nbsp;&nbsp;- _Requirements: 2.1, 2.2_</span><br>
+        <br>
+        <span class="md-cb-inprog">- [~] 3. Refresh token rotation</span><br>
+        <span class="md-detail">&nbsp;&nbsp;- Store refresh tokens in Redis with TTL</span><br>
+        <span class="md-detail">&nbsp;&nbsp;- Invalidate old token on rotation</span><br>
+        <span class="md-req">&nbsp;&nbsp;- _Requirements: 2.3_</span><br>
+        <br>
+        <span class="codelens">&nbsp;&nbsp;<span>▶ Start task</span></span>
+        <span class="md-cb-pending">- [ ] 4. Rate limiting middleware</span><br>
+        <span class="md-detail">&nbsp;&nbsp;- Sliding window counter per IP</span><br>
+        <span class="md-req">&nbsp;&nbsp;- _Requirements: 3.1_</span><br>
+        <br>
+        <span class="codelens">&nbsp;&nbsp;<span>▶ Start task</span></span>
+        <span class="md-cb-pending">- [ ] 5. Integration tests</span><br>
+      </div>
+    </div>
+    <div class="status-bar">
+      <div class="status-left">
+        <span>⎇ main</span>
+        <span>⊘ 0  ⚠ 0</span>
+      </div>
+      <div class="status-right">
+        <span>Markdown</span>
+        <span>UTF-8</span>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

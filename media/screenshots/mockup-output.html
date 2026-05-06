@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #1e1e1e; font-family: -apple-system, 'Segoe UI', sans-serif; font-size: 13px; color: #cccccc; width: 860px; height: 480px; overflow: hidden; display: flex; flex-direction: column; }
+
+  .tabs-bar { background: #2d2d2d; display: flex; align-items: stretch; border-bottom: 1px solid #1a1a1a; min-height: 35px; }
+  .tab { padding: 0 16px; font-size: 13px; color: #969696; border-right: 1px solid #1e1e1e; cursor: pointer; display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+  .tab.active { background: #1e1e1e; color: #fff; border-top: 2px solid #0078d4; }
+
+  .panel-area { display: flex; flex-direction: column; flex: 1; background: #1e1e1e; overflow: hidden; }
+  .panel-tabs { display: flex; background: #252526; border-bottom: 1px solid #3c3c3c; }
+  .panel-tab { padding: 6px 16px; font-size: 12px; color: #969696; cursor: pointer; border-bottom: 2px solid transparent; text-transform: uppercase; letter-spacing: 0.05em; }
+  .panel-tab.active { color: #e8e8e8; border-bottom-color: #e8e8e8; }
+
+  .output-header { display: flex; align-items: center; gap: 10px; padding: 4px 10px; background: #252526; border-bottom: 1px solid #3c3c3c; font-size: 12px; color: #aaa; }
+  .channel-select { background: #3c3c3c; border: 1px solid #555; color: #ccc; font-size: 12px; padding: 2px 6px; border-radius: 3px; cursor: pointer; }
+  .output-toolbar { margin-left: auto; display: flex; gap: 4px; }
+  .tool-btn { background: none; border: none; color: #888; font-size: 14px; cursor: pointer; padding: 2px 5px; border-radius: 3px; }
+  .tool-btn:hover { background: #3c3c3c; color: #ccc; }
+
+  .output-body { flex: 1; padding: 8px 12px; font-family: 'SF Mono', 'Cascadia Code', monospace; font-size: 12.5px; line-height: 20px; overflow-y: auto; }
+
+  .line { display: flex; gap: 10px; }
+  .ts { color: #4a4a4a; min-width: 80px; }
+  .msg { flex: 1; }
+
+  .c-title { color: #569cd6; font-weight: bold; }
+  .c-tool { color: #9cdcfe; }
+  .c-cmd { color: #b5cea8; }
+  .c-read { color: #ce9178; }
+  .c-write { color: #4ec9b0; }
+  .c-ok { color: #4ec994; font-weight: bold; }
+  .c-err { color: #f14c4c; }
+  .c-dim { color: #555; }
+  .c-cost { color: #888; }
+  .c-spin { color: #f0c040; animation: spin 1s linear infinite; display: inline-block; }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .status-bar { height: 22px; background: #007acc; display: flex; align-items: center; padding: 0 10px; font-size: 12px; color: white; gap: 12px; }
+  .statusbar-item { display: flex; align-items: center; gap: 4px; }
+  .status-right { margin-left: auto; display: flex; gap: 12px; }
+</style>
+</head>
+<body>
+  <!-- Editor tabs (top) -->
+  <div class="tabs-bar">
+    <div class="tab">tasks.md</div>
+    <div class="tab active">requirements.md</div>
+  </div>
+
+  <!-- Panel -->
+  <div class="panel-area">
+    <div class="panel-tabs">
+      <div class="panel-tab">Problems</div>
+      <div class="panel-tab">Terminal</div>
+      <div class="panel-tab active">Output</div>
+      <div class="panel-tab">Debug Console</div>
+    </div>
+
+    <div class="output-header">
+      <span>Output channel:</span>
+      <select class="channel-select">
+        <option>Kosmo: 4. Rate limiting middleware</option>
+      </select>
+      <div class="output-toolbar">
+        <button class="tool-btn">⊘</button>
+        <button class="tool-btn">⋮</button>
+      </div>
+    </div>
+
+    <div class="output-body">
+      <div class="line"><span class="msg c-title">▶ 4. Rate limiting middleware</span></div>
+      <div class="line"><span class="msg c-dim">────────────────────────────────────────</span></div>
+      <br>
+      <div class="line"><span class="msg c-tool">  read package.json</span></div>
+      <div class="line"><span class="msg c-tool">  read src/middleware/index.ts</span></div>
+      <div class="line"><span class="msg c-cmd">  $ ls src/middleware/</span></div>
+      <div class="line"><span class="msg c-read">  read src/middleware/auth.ts</span></div>
+      <div class="line"><span class="msg c-tool">  read src/config/redis.ts</span></div>
+      <br>
+      <div class="line"><span class="msg c-write">  write src/middleware/rateLimit.ts</span></div>
+      <div class="line"><span class="msg c-cmd">  $ npx tsc --noEmit</span></div>
+      <div class="line"><span class="msg c-write">  edit src/middleware/index.ts</span></div>
+      <br>
+      <div class="line"><span class="msg c-write">  write src/middleware/rateLimit.test.ts</span></div>
+      <div class="line"><span class="msg c-cmd">  $ npm test -- --testPathPattern rateLimit</span></div>
+      <br>
+      <div class="line"><span class="msg" style="color:#4a4a4a;">  PASS  src/middleware/rateLimit.test.ts</span></div>
+      <div class="line"><span class="msg" style="color:#4a4a4a;">    ✓ blocks after 100 req/min (12 ms)</span></div>
+      <div class="line"><span class="msg" style="color:#4a4a4a;">    ✓ resets sliding window (8 ms)</span></div>
+      <div class="line"><span class="msg" style="color:#4a4a4a;">    ✓ returns 429 with Retry-After header (5 ms)</span></div>
+      <br>
+      <div class="line"><span class="msg c-ok">✓ done · 43s · $0.0031</span></div>
+    </div>
+  </div>
+
+  <div class="status-bar">
+    <div class="statusbar-item"><span>⎇ main</span></div>
+    <div class="statusbar-item"><span>⊘ 0  ⚠ 0</span></div>
+    <div class="status-right">
+      <span>Markdown</span>
+      <span>UTF-8</span>
+    </div>
+  </div>
+</body>
+</html>
