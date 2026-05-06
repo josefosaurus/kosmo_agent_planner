@@ -5,3 +5,7 @@ src/**
 **/tsconfig.json
 **/.eslintrc.json
 **/*.map
+kosmo.svg
+media/screenshots/**
+node_modules/**
+package-lock.json

@@ -1,6 +1,10 @@
-# Kosmo Sidekick
+<div align="center">
+  <img src="kosmo.png" alt="Kosmo Sidekick" width="128" />
 
-Spec-driven development for VSCode — powered by Claude Code CLI. Describe a feature, get a full requirements + design + task breakdown, then run each task as an isolated AI agent.
+  # Kosmo Sidekick
+
+  Spec-driven development for VSCode — powered by Claude Code CLI. Describe a feature, get a full requirements + design + task breakdown, then run each task as an isolated AI agent.
+</div>
 
 Inspired by [Kiro](https://kiro.dev/).
 
