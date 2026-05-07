@@ -3,7 +3,7 @@
 
   # Kosmo Sidekick
 
-  Spec-driven development for VSCode — powered by Claude Code CLI. Describe a feature, get a full requirements + design + task breakdown, then run each task as an isolated AI agent.
+  Spec-driven development for VSCode — powered by any AI CLI agent. Describe a feature, get a full requirements + design + task breakdown, then run each task as an isolated AI agent.
 </div>
 
 Inspired by [Kiro](https://kiro.dev/).
@@ -29,6 +29,10 @@ Inspired by [Kiro](https://kiro.dev/).
 
 ![Sidebar with task list](media/screenshots/sidebar.png)
 
+### CLI picker — choose your AI agent on first use
+
+![CLI picker quick select](media/screenshots/selectcli.png)
+
 ### Output — live agent tool-use stream with cost
 
 ![Output channel during task execution](media/screenshots/output.png)
@@ -38,7 +42,19 @@ Inspired by [Kiro](https://kiro.dev/).
 ## Requirements
 
 - VSCode 1.75+
-- [Claude Code CLI](https://claude.ai/code) installed and authenticated (`claude` on PATH)
+- At least one supported AI CLI installed and authenticated:
+
+| CLI | Install |
+|---|---|
+| `claude` | [Claude Code](https://claude.ai/code) |
+| `gemini` | [Gemini CLI](https://github.com/google-gemini/gemini-cli) |
+| `codex` | [OpenAI Codex CLI](https://github.com/openai/codex) |
+| `opencode` | [OpenCode](https://opencode.ai) |
+| `deepseek` | DeepSeek CLI |
+| `llm` | [llm by Simon Willison](https://llm.datasette.io) |
+| `sgpt` | [ShellGPT](https://github.com/TheR1D/shell_gpt) |
+
+> **Note:** Task execution always uses `claude` (Claude Code CLI) — it provides the Read/Write/Edit/Bash tools that run your tasks. The CLI picker only affects spec generation.
 
 ---
 
@@ -65,6 +81,8 @@ Open the Command Palette (`⌘⇧P`) → **Kosmo: New Spec**
 
 Enter a goal like:
 > _"Add rate limiting to the REST API using a Redis sliding window"_
+
+On first use, Kosmo detects which AI CLIs are installed and asks you to pick one. The choice is saved globally — change it anytime via **Kosmo: Select AI CLI**.
 
 Kosmo writes three files to `.kosmo/specs/[spec-name]/`:
 
@@ -122,3 +140,4 @@ For best results, fill in the generated `CLAUDE.md` at your project root. Every 
 | `Kosmo: Start Task` | Run selected task via Claude Code |
 | `Kosmo: Kill Task` | Stop running task |
 | `Kosmo: Refresh Tasks` | Manually refresh sidebar |
+| `Kosmo: Select AI CLI` | Change which CLI is used for spec generation |

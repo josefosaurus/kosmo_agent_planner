@@ -1,6 +1,7 @@
 {
   "conventionalCommits.scopes": [
-    "statusbar"
+    "statusbar",
+    "multi-cli"
   ],
   "postman.settings.dotenv-detection-notification-visibility": false
 }
