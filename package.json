@@ -67,6 +67,18 @@
         }
       ]
     },
+    "customEditors": [
+      {
+        "viewType": "kosmo.specEditor",
+        "displayName": "Kosmo Spec Viewer",
+        "selector": [
+          { "filenamePattern": "**/.kosmo/specs/**/requirements.md" },
+          { "filenamePattern": "**/.kosmo/specs/**/design.md" },
+          { "filenamePattern": "**/.kosmo/specs/**/tasks.md" }
+        ],
+        "priority": "default"
+      }
+    ],
     "menus": {
       "view/title": [
         {
