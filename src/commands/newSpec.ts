@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import { TasksDataProvider } from '../views/tasksDataProvider';
-import { generateSpec } from '../services/specGenerator';
+import { SpecToolbarPanel } from '../views/specToolbar';
 import { ensureDir, writeFile, workspaceRoot, fileExists } from '../utils/fileSystem';
 import { claudeMdTemplate } from '../utils/templates';
 
@@ -28,8 +28,9 @@ export async function newSpec(provider: TasksDataProvider): Promise<void> {
     if (!rawName) return;
 
     const specName = rawName.trim();
-    const specDir = path.join(root, '.kosmo', 'specs', specName);
+    const specDir  = path.join(root, '.kosmo', 'specs', specName);
     await ensureDir(specDir);
+    await writeFile(path.join(specDir, 'goal.txt'), goal);
 
     const claudeMdPath = path.join(root, 'CLAUDE.md');
     if (!(await fileExists(claudeMdPath))) {
@@ -37,25 +38,6 @@ export async function newSpec(provider: TasksDataProvider): Promise<void> {
         vscode.window.showInformationMessage('Created CLAUDE.md — fill it in with project context.');
     }
 
-    try {
-        await vscode.window.withProgress(
-            {
-                location: vscode.ProgressLocation.Notification,
-                title: `Kosmo: Generating spec "${specName}"`,
-                cancellable: false,
-            },
-            async (progress) => {
-                await generateSpec(goal, specDir, root, (message, increment) => {
-                    progress.report({ message, increment });
-                });
-            }
-        );
-    } catch (err) {
-        vscode.window.showErrorMessage(`Spec generation failed: ${(err as Error).message}`);
-        return;
-    }
-
-    const tasksUri = vscode.Uri.file(path.join(specDir, 'tasks.md'));
-    await vscode.window.showTextDocument(tasksUri);
+    SpecToolbarPanel.startNew(goal, specName, specDir, root);
     provider.refresh();
 }

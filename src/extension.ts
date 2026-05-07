@@ -4,6 +4,8 @@ import { startTask } from './commands/startTask';
 import { TasksDataProvider, TaskItem } from './views/tasksDataProvider';
 import { KosmoCodeLensProvider } from './providers/codelensProvider';
 import { killTask } from './services/taskRunner';
+import { SpecToolbarPanel, specInfoFromUri } from './views/specToolbar';
+import { SpecCustomEditorProvider } from './views/specCustomEditor';
 
 export function activate(context: vscode.ExtensionContext) {
     const tasksProvider = new TasksDataProvider();
@@ -29,9 +31,17 @@ export function activate(context: vscode.ExtensionContext) {
     );
 
     const watcher = vscode.workspace.createFileSystemWatcher('**/.kosmo/specs/**/tasks.md');
-    watcher.onDidChange(() => tasksProvider.refresh());
-    watcher.onDidCreate(() => tasksProvider.refresh());
+    watcher.onDidChange(() => { tasksProvider.refresh(); SpecToolbarPanel.refreshCurrent(); });
+    watcher.onDidCreate(() => { tasksProvider.refresh(); SpecToolbarPanel.refreshCurrent(); });
     context.subscriptions.push(watcher);
+
+    context.subscriptions.push(
+        vscode.window.registerCustomEditorProvider(
+            SpecCustomEditorProvider.viewType,
+            new SpecCustomEditorProvider(),
+            { webviewOptions: { retainContextWhenHidden: true } }
+        )
+    );
 }
 
 export function deactivate() {}
