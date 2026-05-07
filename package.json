@@ -55,8 +55,23 @@
         "command": "kosmo.refreshTasks",
         "title": "Kosmo: Refresh Tasks",
         "icon": "$(refresh)"
+      },
+      {
+        "command": "kosmo.selectCli",
+        "title": "Kosmo: Select AI CLI",
+        "icon": "$(settings-gear)"
       }
     ],
+    "configuration": {
+      "title": "Kosmo",
+      "properties": {
+        "kosmo.specCli": {
+          "type": "string",
+          "default": "",
+          "description": "AI CLI binary to use for spec generation (e.g. claude, gemini, codex). Auto-detected if empty."
+        }
+      }
+    },
     "views": {
       "explorer": [
         {
