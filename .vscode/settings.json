@@ -1,0 +1,6 @@
+{
+  "conventionalCommits.scopes": [
+    "statusbar"
+  ],
+  "postman.settings.dotenv-detection-notification-visibility": false
+}
