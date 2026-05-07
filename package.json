@@ -4,6 +4,11 @@
   "description": "Spec-driven development with Claude Code CLI. Generate requirements, design, and tasks from a goal — then run each task as an isolated AI agent.",
   "version": "0.0.1",
   "publisher": "josefosaurus",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/josefosaurus/kosmo_agent_planner"
+  },
   "icon": "kosmo.png",
   "galleryBanner": {
     "color": "#0f0f0f",
