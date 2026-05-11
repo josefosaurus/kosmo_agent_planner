@@ -37,6 +37,18 @@ Press **F5** in VSCode to launch Extension Development Host.
   tasks.md
 ```
 
+**Source layout** (`src/`):
+- `commands/` — `newSpec.ts` (prompt user, create spec dir, launch toolbar), `startTask.ts` (mark in-progress, delegate to taskRunner)
+- `services/` — `specGenerator.ts`, `taskRunner.ts`, `taskTracker.ts`
+- `views/` — `tasksDataProvider.ts` (sidebar tree), `specToolbar.ts` (new-spec panel), `specCustomEditor.ts` (saved-spec viewer)
+- `providers/` — `codelensProvider.ts` (▶ Start task buttons on tasks.md)
+- `utils/` — `fileSystem.ts` (mkdir/write helpers), `templates.ts` (all Claude prompt strings + CLAUDE.md template)
+
+**Two webview panels**:
+- `SpecToolbarPanel` (`views/specToolbar.ts`): singleton panel launched by "New Spec"; owns the step-by-step generate → review → approve flow
+- `SpecCustomEditorProvider` (`views/specCustomEditor.ts`): registered as a custom editor for `.kosmo/specs/**/*.md`; renders saved spec files with the same markdown renderer, step nav, and sync button
+- Both render markdown to raw HTML/CSS — no external markdown library
+
 ## Key implementation details
 
 **Task state regex** (`taskTracker.ts`): `^(- \[)[ ~x](\] N\.)` where N is the integer task index. The index must match the number prefix in `N. Task title` exactly.
@@ -50,6 +62,10 @@ Press **F5** in VSCode to launch Extension Development Host.
 **`parseTasks`** (`tasksDataProvider.ts`): exported for testing. Parses lines matching `^- \[([ x~])\] (\d+)\. (.+)`. Detail lines (`  - text`) and requirements lines (`  - _Requirements: …_`) are attached to the preceding task.
 
 **`TaskItem.contextValue`**: `pendingTask` | `inprogressTask` | `doneTask` — drives which inline buttons show in `package.json` menus.
+
+**Prompt templates** (`utils/templates.ts`): `requirementsPrompt()`, `designPrompt()`, and `tasksPrompt()` generate the three Claude prompts used in spec generation. This is the right place to tune generation quality or output format.
+
+**No test suite**: There are no unit or integration tests — `parseTasks` is exported for testing but nothing uses it yet.
 
 ## Spec file formats
 
