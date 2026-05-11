@@ -5,6 +5,7 @@ import { TasksDataProvider, TaskItem } from './views/tasksDataProvider';
 import { KosmoCodeLensProvider } from './providers/codelensProvider';
 import { killTask } from './services/taskRunner';
 import { selectCli } from './services/llmCli';
+import { discover } from './commands/discover';
 import { SpecToolbarPanel, specInfoFromUri } from './views/specToolbar';
 import { SpecCustomEditorProvider } from './views/specCustomEditor';
 
@@ -26,6 +27,8 @@ export function activate(context: vscode.ExtensionContext) {
         vscode.commands.registerCommand('kosmo.refreshTasks', () => tasksProvider.refresh()),
 
         vscode.commands.registerCommand('kosmo.selectCli', () => selectCli()),
+
+        vscode.commands.registerCommand('kosmo.discover', () => discover(tasksProvider)),
 
         vscode.languages.registerCodeLensProvider(
             { pattern: '**/.kosmo/specs/**/tasks.md' },

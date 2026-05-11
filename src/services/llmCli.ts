@@ -3,6 +3,36 @@ import * as vscode from 'vscode';
 
 const CONFIG_KEY = 'kosmo.specCli';
 
+export type ModelTier = 'haiku' | 'sonnet' | 'opus';
+
+const CLI_MODEL_FLAGS: Partial<Record<string, Record<ModelTier, string[]>>> = {
+    claude: {
+        haiku:  ['--model', 'claude-haiku-4-5-20251001'],
+        sonnet: ['--model', 'claude-sonnet-4-6'],
+        opus:   ['--model', 'claude-opus-4-7'],
+    },
+    gemini: {
+        haiku:  ['--model', 'gemini-2.0-flash'],
+        sonnet: ['--model', 'gemini-2.5-pro'],
+        opus:   ['--model', 'gemini-2.5-pro'],
+    },
+    codex: {
+        haiku:  ['--model', 'gpt-4o-mini'],
+        sonnet: ['--model', 'gpt-4o'],
+        opus:   ['--model', 'o3'],
+    },
+    deepseek: {
+        haiku:  ['--model', 'deepseek-chat'],
+        sonnet: ['--model', 'deepseek-chat'],
+        opus:   ['--model', 'deepseek-reasoner'],
+    },
+    // llm, sgpt, opencode, subq, miami: model selection is provider-specific or unsupported
+};
+
+export function resolveModelFlag(cliBin: string, tier: ModelTier): string[] {
+    return CLI_MODEL_FLAGS[cliBin]?.[tier] ?? [];
+}
+
 interface CliAdapter {
     bin: string;
     label: string;
@@ -17,9 +47,11 @@ const KNOWN_CLIS: CliAdapter[] = [
     { bin: 'deepseek', label: 'DeepSeek CLI (deepseek)', args: p => [p] },
     { bin: 'llm',      label: 'llm (Simon Willison)',     args: p => [p] },
     { bin: 'sgpt',     label: 'ShellGPT (sgpt)',          args: p => [p] },
+    { bin: 'subq',     label: 'SubQ / Miami (subq)',      args: p => [p] },
+    { bin: 'miami',    label: 'Miami (miami)',             args: p => [p] },
 ];
 
-function isInPath(bin: string): Promise<boolean> {
+export function isInPath(bin: string): Promise<boolean> {
     return new Promise(resolve => {
         const cmd = process.platform === 'win32' ? 'where' : 'which';
         const proc = cp.spawn(cmd, [bin], { stdio: 'ignore' });
@@ -88,9 +120,10 @@ async function getSelectedCli(): Promise<CliAdapter> {
     return pick.cli;
 }
 
-export function runWithCli(prompt: string, cwd: string): Promise<string> {
+export function runWithCli(prompt: string, cwd: string, tier?: ModelTier): Promise<string> {
     return getSelectedCli().then(cli => new Promise((resolve, reject) => {
-        const proc = cp.spawn(cli.bin, cli.args(prompt), {
+        const modelArgs = resolveModelFlag(cli.bin, tier ?? 'sonnet');
+        const proc = cp.spawn(cli.bin, [...cli.args(prompt), ...modelArgs], {
             cwd, env: process.env, stdio: ['ignore', 'pipe', 'pipe']
         });
         let stdout = '';

@@ -4,19 +4,19 @@ import { requirementsPrompt, designPrompt, tasksPrompt } from '../utils/template
 import { runWithCli } from './llmCli';
 
 export async function generateRequirements(goal: string, specDir: string, cwd: string): Promise<string> {
-    const content = await runWithCli(requirementsPrompt(goal), cwd);
+    const content = await runWithCli(requirementsPrompt(goal), cwd, 'opus');
     await writeFile(path.join(specDir, 'requirements.md'), content);
     return content;
 }
 
 export async function generateDesign(goal: string, requirements: string, specDir: string, cwd: string): Promise<string> {
-    const content = await runWithCli(designPrompt(goal, requirements), cwd);
+    const content = await runWithCli(designPrompt(goal, requirements), cwd, 'opus');
     await writeFile(path.join(specDir, 'design.md'), content);
     return content;
 }
 
 export async function generateTasks(goal: string, requirements: string, design: string, specDir: string, cwd: string): Promise<string> {
-    const content = await runWithCli(tasksPrompt(goal, requirements, design), cwd);
+    const content = await runWithCli(tasksPrompt(goal, requirements, design), cwd, 'opus');
     await writeFile(path.join(specDir, 'tasks.md'), content);
     return content;
 }

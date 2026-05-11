@@ -60,6 +60,11 @@
         "command": "kosmo.selectCli",
         "title": "Kosmo: Select AI CLI",
         "icon": "$(settings-gear)"
+      },
+      {
+        "command": "kosmo.discover",
+        "title": "Kosmo: Discover",
+        "icon": "$(search)"
       }
     ],
     "configuration": {
@@ -111,6 +116,11 @@
           "command": "kosmo.refreshTasks",
           "when": "view == kosmoTasks",
           "group": "navigation@2"
+        },
+        {
+          "command": "kosmo.discover",
+          "when": "view == kosmoTasks",
+          "group": "navigation@3"
         }
       ],
       "view/item/context": [
@@ -129,6 +139,7 @@
   },
   "scripts": {
     "compile": "tsc -p ./",
+    "test": "npm run compile && node --test out/test/suite.test.js",
     "watch": "tsc -watch -p ./",
     "lint": "eslint src --ext .ts",
     "package": "vsce package --no-dependencies",

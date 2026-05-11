@@ -5,7 +5,7 @@ import { SpecToolbarPanel } from '../views/specToolbar';
 import { ensureDir, writeFile, workspaceRoot, fileExists } from '../utils/fileSystem';
 import { claudeMdTemplate } from '../utils/templates';
 
-export async function newSpec(provider: TasksDataProvider): Promise<void> {
+export async function newSpec(provider: TasksDataProvider, initialGoal?: string): Promise<void> {
     const root = workspaceRoot();
     if (!root) {
         vscode.window.showErrorMessage('Open a workspace folder first.');
@@ -15,6 +15,7 @@ export async function newSpec(provider: TasksDataProvider): Promise<void> {
     const goal = await vscode.window.showInputBox({
         prompt: 'Describe the feature or goal',
         placeHolder: 'e.g. Add user authentication with JWT tokens',
+        value: initialGoal,
         ignoreFocusOut: true,
     });
     if (!goal) return;

@@ -5,6 +5,10 @@ import * as path from 'path';
 import { TaskItem } from '../views/tasksDataProvider';
 import { markDone, markPending } from './taskTracker';
 import { workspaceRoot } from '../utils/fileSystem';
+import { ModelTier, resolveModelFlag } from './llmCli';
+import { parseRequirementsRefs, pruneRequirements } from '../utils/contextPruner';
+import { resolveTaskTier } from '../utils/taskTier';
+export { resolveTaskTier };
 
 const runningProcs = new Map<string, cp.ChildProcess>();
 
@@ -34,12 +38,19 @@ export async function runTask(item: TaskItem): Promise<void> {
         design = await fs.readFile(path.join(item.specDir, 'design.md'), 'utf8');
     } catch { /* proceed without context */ }
 
-    const prompt = buildPrompt(item.label, item.details, requirements, design);
+    const claudeMd = await readClaudeMd(cwd);
+    const refs = parseRequirementsRefs(item.requirements ?? '');
+    const prunedRequirements = pruneRequirements(requirements, refs);
+    const tier = resolveTaskTier(item.label, item.details);
     const key = procKey(item.tasksFilePath, item.taskIndex);
 
     const channel = vscode.window.createOutputChannel(`Kosmo: ${item.label}`);
     channel.show(true);
-    channel.appendLine(`▶ ${item.label}`);
+    channel.appendLine(`▶ ${item.label} [${tier}]`);
+
+    guardClaudeMdSize(claudeMd, channel);
+
+    const prompt = buildPrompt(item.label, item.details, prunedRequirements, design, claudeMd);
     channel.appendLine('');
 
     const statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
@@ -58,7 +69,7 @@ export async function runTask(item: TaskItem): Promise<void> {
 
     const proc = cp.spawn(
         'claude',
-        ['-p', prompt, '--output-format', 'stream-json', '--verbose'],
+        ['-p', prompt, '--output-format', 'stream-json', '--verbose', ...resolveModelFlag('claude', tier)],
         { cwd, env: process.env, stdio: ['ignore', 'pipe', 'pipe'] }
     );
     runningProcs.set(key, proc);
@@ -163,10 +174,27 @@ function toolLabel(name: string | undefined, input: Record<string, unknown>): st
     }
 }
 
-function buildPrompt(title: string, details: string[], requirements: string, design: string): string {
-    const lines = [`# Task: ${title}`, ''];
-    if (details.length > 0) lines.push('## Details', ...details.map(d => `- ${d}`), '');
+async function readClaudeMd(cwd: string): Promise<string> {
+    try {
+        return await fs.readFile(path.join(cwd, 'CLAUDE.md'), 'utf8');
+    } catch {
+        return '';
+    }
+}
+
+function guardClaudeMdSize(content: string, channel: vscode.OutputChannel): void {
+    const tokens = Math.ceil(content.length / 4);
+    if (tokens > 2000) {
+        channel.appendLine(`⚠ CLAUDE.md is ~${tokens} tokens — recommended max is 2000. Consider trimming it.`);
+    }
+}
+
+export function buildPrompt(title: string, details: string[], requirements: string, design: string, claudeMd?: string): string {
+    const lines: string[] = [];
+    if (claudeMd) lines.push('## Project Context', claudeMd, '');
     if (requirements) lines.push('## Requirements', requirements, '');
     if (design) lines.push('## Design', design, '');
+    if (details.length > 0) lines.push('## Details', ...details.map(d => `- ${d}`), '');
+    lines.push(`# Task: ${title}`);
     return lines.join('\n');
 }
