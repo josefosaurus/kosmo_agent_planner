@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import { parseTasks } from '../views/tasksDataProvider';
+import { isRunning } from '../services/taskRunner';
 
 export class KosmoCodeLensProvider implements vscode.CodeLensProvider {
     provideCodeLenses(document: vscode.TextDocument): vscode.CodeLens[] {
@@ -9,19 +10,32 @@ export class KosmoCodeLensProvider implements vscode.CodeLensProvider {
         const tasks = parseTasks(content, document.uri.fsPath, specDir);
         const lines = content.split('\n');
 
-        return tasks
-            .filter(t => t.state === 'pending')
-            .flatMap(task => {
-                const lineIndex = lines.findIndex(l =>
-                    new RegExp(`^- \\[ \\] ${task.taskIndex}\\.`).test(l)
-                );
-                if (lineIndex === -1) return [];
-                const range = new vscode.Range(lineIndex, 0, lineIndex, 0);
-                return [new vscode.CodeLens(range, {
-                    title: '▶ Start task',
+        return tasks.flatMap(task => {
+            const stateChar = task.state === 'done' ? 'x' : task.state === 'inprogress' ? '~' : ' ';
+            const lineIndex = lines.findIndex(l =>
+                new RegExp(`^- \\[${stateChar}\\] ${task.taskIndex}\\.`).test(l)
+            );
+            if (lineIndex === -1) return [];
+
+            const range = new vscode.Range(lineIndex, 0, lineIndex, 0);
+            const lenses: vscode.CodeLens[] = [];
+            const running = isRunning(task.tasksFilePath, task.taskIndex);
+
+            if (running) {
+                lenses.push(new vscode.CodeLens(range, {
+                    title: '⏹ Kill task',
+                    command: 'kosmo.killTask',
+                    arguments: [task],
+                }));
+            } else {
+                lenses.push(new vscode.CodeLens(range, {
+                    title: task.state === 'done' ? '↺ Restart task' : '▶ Start task',
                     command: 'kosmo.startTask',
                     arguments: [task],
-                })];
-            });
+                }));
+            }
+
+            return lenses;
+        });
     }
 }

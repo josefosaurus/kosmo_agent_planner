@@ -1,7 +1,8 @@
 import * as vscode from 'vscode';
+import * as fs from 'fs/promises';
 import { newSpec } from './commands/newSpec';
 import { startTask } from './commands/startTask';
-import { TasksDataProvider, TaskItem } from './views/tasksDataProvider';
+import { TasksDataProvider, TaskItem, SpecGroupItem } from './views/tasksDataProvider';
 import { KosmoCodeLensProvider } from './providers/codelensProvider';
 import { killTask } from './services/taskRunner';
 import { selectCli } from './services/llmCli';
@@ -29,6 +30,18 @@ export function activate(context: vscode.ExtensionContext) {
         vscode.commands.registerCommand('kosmo.selectCli', () => selectCli()),
 
         vscode.commands.registerCommand('kosmo.discover', () => discover(tasksProvider)),
+
+        vscode.commands.registerCommand('kosmo.deleteSpec', async (item?: SpecGroupItem) => {
+            if (!item) return;
+            const answer = await vscode.window.showWarningMessage(
+                `Delete spec "${item.specName}" and all its files? This cannot be undone.`,
+                { modal: true },
+                'Delete',
+            );
+            if (answer !== 'Delete') return;
+            await fs.rm(item.specDir, { recursive: true, force: true });
+            tasksProvider.refresh();
+        }),
 
         vscode.languages.registerCodeLensProvider(
             { pattern: '**/.kosmo/specs/**/tasks.md' },

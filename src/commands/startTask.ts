@@ -8,8 +8,8 @@ export async function startTask(item?: TaskItem): Promise<void> {
         vscode.window.showErrorMessage('Select a pending task from the Kosmo Tasks panel.');
         return;
     }
-    if (item.state !== 'pending') {
-        vscode.window.showWarningMessage(`Task "${item.label}" is already ${item.state}.`);
+    if (item.state === 'inprogress') {
+        vscode.window.showWarningMessage(`Task "${item.label}" is already running.`);
         return;
     }
 

@@ -3,6 +3,8 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import { generateSpec } from '../services/specGenerator';
 import { workspaceRoot } from '../utils/fileSystem';
+import { parseTasks } from './tasksDataProvider';
+import { killTask, isRunning } from '../services/taskRunner';
 
 const STEPS = [
     { key: 'requirements', label: 'Requirements' },
@@ -35,7 +37,9 @@ export class SpecCustomEditorProvider implements vscode.CustomTextEditorProvider
         if (!info) return;
 
         const render = () => {
-            webviewPanel.webview.html = buildHtml(info, document.getText());
+            const text = document.getText();
+            const tasks = info.step === 'tasks' ? parseTasks(text, document.uri.fsPath, info.specDir) : [];
+            webviewPanel.webview.html = buildHtml(info, text, tasks);
         };
         render();
 
@@ -44,16 +48,29 @@ export class SpecCustomEditorProvider implements vscode.CustomTextEditorProvider
         });
         webviewPanel.onDidDispose(() => docChange.dispose());
 
-        webviewPanel.webview.onDidReceiveMessage(async (msg: { command: string; step?: StepKey }) => {
-            if (msg.command === 'openStep' && msg.step) {
+        webviewPanel.webview.onDidReceiveMessage(async (msg: { command: string; step?: StepKey; content?: string; taskIndex?: number }) => {
+            if (msg.command === 'contentChanged' && msg.content !== undefined) {
+                const edit = new vscode.WorkspaceEdit();
+                edit.replace(document.uri, new vscode.Range(
+                    document.positionAt(0),
+                    document.positionAt(document.getText().length)
+                ), msg.content);
+                await vscode.workspace.applyEdit(edit);
+            } else if (msg.command === 'openStep' && msg.step) {
                 const uri = vscode.Uri.file(path.join(info.specDir, `${msg.step}.md`));
                 await vscode.window.showTextDocument(uri);
             } else if (msg.command === 'continue') {
                 const idx  = STEPS.findIndex(s => s.key === info.step);
                 const next = STEPS[idx + 1];
                 if (next) await vscode.window.showTextDocument(vscode.Uri.file(path.join(info.specDir, `${next.key}.md`)));
-            } else if (msg.command === 'editSource') {
-                await vscode.commands.executeCommand('workbench.action.reopenTextEditor');
+            } else if (msg.command === 'startTask' && msg.taskIndex !== undefined) {
+                const tasks = parseTasks(document.getText(), document.uri.fsPath, info.specDir);
+                const task = tasks.find(t => t.taskIndex === msg.taskIndex);
+                if (task) await vscode.commands.executeCommand('kosmo.startTask', task);
+            } else if (msg.command === 'killTask' && msg.taskIndex !== undefined) {
+                await killTask(document.uri.fsPath, msg.taskIndex);
+            } else if (msg.command === 'openPreview') {
+                await vscode.commands.executeCommand('markdown.showPreview', document.uri);
             } else if (msg.command === 'sync') {
                 const goalPath = path.join(info.specDir, 'goal.txt');
                 let goal: string;
@@ -77,6 +94,7 @@ export class SpecCustomEditorProvider implements vscode.CustomTextEditorProvider
 function buildHtml(
     info: { specName: string; specDir: string; step: StepKey },
     content: string,
+    tasks: import('./tasksDataProvider').TaskItem[] = [],
 ): string {
     const currentIdx = STEPS.findIndex(s => s.key === info.step);
     const isLast     = currentIdx === STEPS.length - 1;
@@ -94,9 +112,20 @@ function buildHtml(
         ? `<button class="btn-primary" disabled>✓ Complete</button>`
         : `<button class="btn-primary" onclick="cont()">→ Continue</button>`;
 
-    const body = content.trim()
-        ? renderMarkdown(content)
-        : `<p class="empty">Generating…</p>`;
+    const taskBarHtml = tasks.length > 0 ? (() => {
+        const items = tasks.filter(t => t.state !== 'done').map(t => {
+            const running = isRunning(t.tasksFilePath, t.taskIndex);
+            const btn = running
+                ? `<button class="task-btn kill" onclick="killTask(${t.taskIndex})">⏹ ${t.taskIndex}. ${esc(String(t.label))}</button>`
+                : `<button class="task-btn start" onclick="startTask(${t.taskIndex})">▶ ${t.taskIndex}. ${esc(String(t.label))}</button>`;
+            return btn;
+        }).join('');
+        return items ? `<div class="task-bar">${items}</div>` : '';
+    })() : '';
+
+    const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const escaped = esc(content);
+    const eyeIcon = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`;
 
     return /* html */`<!DOCTYPE html><html><head><meta charset="utf-8">
 <style>
@@ -115,7 +144,7 @@ function buildHtml(
     border-bottom: 1px solid var(--vscode-panel-border, rgba(255,255,255,.1));
     background: var(--vscode-editor-background);
   }
-.steps { display: flex; align-items: center; gap: 5px; flex: 1; }
+  .steps { display: flex; align-items: center; gap: 5px; flex: 1; }
   .sep { opacity: .3; margin: 0 1px; }
   .step {
     display: inline-flex; align-items: center; gap: 7px;
@@ -135,12 +164,6 @@ function buildHtml(
     font-size: 11px; font-weight: 700;
   }
   .actions { display: flex; gap: 8px; margin-left: auto; align-items: center; }
-  .btn-ghost {
-    background: none; border: none; color: var(--vscode-foreground);
-    opacity: .45; cursor: pointer; font-size: 12px; font-family: inherit;
-    padding: 4px 8px; border-radius: 4px;
-  }
-  .btn-ghost:hover { opacity: .8; background: rgba(255,255,255,.06); }
   .btn-secondary {
     display: inline-flex; align-items: center; gap: 5px;
     padding: 5px 13px; border-radius: 6px;
@@ -157,83 +180,105 @@ function buildHtml(
   }
   .btn-primary:hover:not(:disabled) { background: #7c3aed; }
   .btn-primary:disabled { opacity: .4; cursor: default; }
-
-  /* content */
-  .content {
-    flex: 1; overflow-y: auto;
-    padding: 28px 40px 40px;
-    max-width: 860px; width: 100%; margin: 0 auto;
+  .editor-wrap {
+    flex: 1; display: flex; overflow: hidden;
+    font-family: var(--vscode-editor-font-family, 'Menlo', 'Monaco', 'Courier New', monospace);
+    font-size: 13px; line-height: 20px;
   }
-  h1 { font-size: 1.45em; font-weight: 700; margin-bottom: 14px; }
-  h2 { font-size: 1.05em; font-weight: 600; margin: 20px 0 6px;
-       border-bottom: 1px solid rgba(255,255,255,.08); padding-bottom: 4px; }
-  h3 { font-size: .95em; font-weight: 600; margin: 12px 0 4px; }
-  p  { margin: 3px 0; opacity: .85; }
-  li { margin: 2px 0 2px 20px; opacity: .85; }
-  strong { font-weight: 600; }
-  em     { font-style: italic; }
-  code { background: rgba(255,255,255,.08); padding: 1px 5px; border-radius: 3px; font-size: .9em; }
-  pre  { background: rgba(255,255,255,.05); padding: 12px 16px; border-radius: 6px; margin: 8px 0; overflow-x: auto; }
-  pre code { background: none; padding: 0; }
-  .gap { height: 6px; }
-  .empty { opacity: .4; font-style: italic; margin-top: 40px; text-align: center; }
-  .task { display: flex; align-items: baseline; gap: 9px; padding: 4px 0; }
-  .ti { font-size: 13px; width: 15px; flex-shrink: 0; }
-  .tn { opacity: .35; font-size: .82em; flex-shrink: 0; }
-  .tt { flex: 1; }
-  .task.done .tt { opacity: .4; text-decoration: line-through; }
-  .task.done .ti { color: #4ec994; }
-  .task.inprogress .ti, .task.inprogress .tt { color: #f0c040; }
-  .task.pending .ti { opacity: .3; }
-  .detail { padding: 1px 0 1px 24px; font-size: .87em; opacity: .5; }
-  .req    { padding: 1px 0 4px 24px; font-size: .8em; opacity: .38; font-style: italic; }
+  #ln {
+    width: 52px; flex-shrink: 0;
+    padding: 14px 10px 20px 0;
+    text-align: right;
+    color: rgba(128,128,128,.5);
+    border-right: 1px solid rgba(255,255,255,.06);
+    user-select: none; overflow: hidden;
+    white-space: pre;
+    font-family: inherit; font-size: 13px; line-height: 20px;
+  }
+  #ed {
+    flex: 1; background: transparent;
+    color: var(--vscode-editor-foreground);
+    border: none; outline: none; resize: none;
+    padding: 14px 40px 60px 16px;
+    overflow-y: auto; overflow-x: auto;
+    white-space: pre; overflow-wrap: normal;
+    font-family: inherit; font-size: 13px; line-height: 20px;
+    tab-size: 2; caret-color: #7c3aed;
+  }
+  .preview-btn {
+    position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 7px 18px; border-radius: 20px;
+    border: 1px solid rgba(255,255,255,.18);
+    background: rgba(15,15,15,.88); backdrop-filter: blur(8px);
+    color: rgba(255,255,255,.8); cursor: pointer;
+    font-size: 12px; font-family: var(--vscode-font-family);
+    white-space: nowrap; z-index: 10;
+  }
+  .preview-btn:hover { background: rgba(40,40,40,.95); color: #fff; }
+  .main { position: relative; flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+  .task-bar {
+    flex-shrink: 0; display: flex; flex-wrap: wrap; gap: 6px;
+    padding: 6px 16px;
+    border-bottom: 1px solid rgba(255,255,255,.06);
+    background: rgba(255,255,255,.02);
+  }
+  .task-btn {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 3px 10px; border-radius: 4px; border: none;
+    font-size: 11px; font-family: inherit; cursor: pointer;
+    max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .task-btn.start { background: rgba(109,40,217,.25); color: #c4b5fd; }
+  .task-btn.start:hover { background: rgba(109,40,217,.45); }
+  .task-btn.kill  { background: rgba(220,50,50,.2); color: #fca5a5; }
+  .task-btn.kill:hover  { background: rgba(220,50,50,.4); }
 </style>
 </head><body>
   <div class="toolbar">
     <div class="steps">${stepsHtml}</div>
     <div class="actions">
-      <button class="btn-ghost" onclick="editSource()" title="Open as text">✎</button>
       <button class="btn-secondary" onclick="sync()">↻ Sync</button>
       ${actionBtn}
     </div>
   </div>
-  <div class="content">${body}</div>
+  ${taskBarHtml}
+  <div class="main">
+    <div class="editor-wrap">
+      <pre id="ln" aria-hidden="true"></pre>
+      <textarea id="ed" spellcheck="false" autocorrect="off" autocapitalize="off">${escaped}</textarea>
+    </div>
+    <button class="preview-btn" onclick="openPreview()">${eyeIcon}&nbsp;Open Preview</button>
+  </div>
   <script>
     const vscode = acquireVsCodeApi();
-    function openStep(s)  { vscode.postMessage({ command: 'openStep', step: s }); }
-    function cont()       { vscode.postMessage({ command: 'continue' }); }
-    function sync()       { vscode.postMessage({ command: 'sync' }); }
-    function editSource() { vscode.postMessage({ command: 'editSource' }); }
+    const ed = document.getElementById('ed');
+    const ln = document.getElementById('ln');
+
+    updateLineNumbers(ed.value);
+    ed.addEventListener('scroll', () => { ln.scrollTop = ed.scrollTop; });
+
+    let debTimer;
+    ed.addEventListener('input', () => {
+      updateLineNumbers(ed.value);
+      clearTimeout(debTimer);
+      debTimer = setTimeout(() => {
+        vscode.postMessage({ command: 'contentChanged', content: ed.value });
+      }, 400);
+    });
+
+    function updateLineNumbers(text) {
+      const count = (text || '').split('\\n').length;
+      ln.textContent = Array.from({ length: count }, (_, i) => i + 1).join('\\n');
+    }
+
+    function openStep(s)    { vscode.postMessage({ command: 'openStep', step: s }); }
+    function cont()         { vscode.postMessage({ command: 'continue' }); }
+    function sync()         { vscode.postMessage({ command: 'sync' }); }
+    function openPreview()  { vscode.postMessage({ command: 'openPreview' }); }
+    function startTask(idx) { vscode.postMessage({ command: 'startTask', taskIndex: idx }); }
+    function killTask(idx)  { vscode.postMessage({ command: 'killTask',  taskIndex: idx }); }
   </script>
 </body></html>`;
 }
 
-function renderMarkdown(raw: string): string {
-    const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    const inline = (s: string) => esc(s)
-        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-        .replace(/_(.+?)_/g, '<em>$1</em>')
-        .replace(/`([^`]+)`/g, '<code>$1</code>');
-    const out: string[] = [];
-    let inCode = false;
-    for (const line of raw.split('\n')) {
-        if (line.startsWith('```')) { inCode ? out.push('</code></pre>') : out.push('<pre><code>'); inCode = !inCode; continue; }
-        if (inCode) { out.push(esc(line)); continue; }
-        if (/^### /.test(line)) { out.push(`<h3>${inline(line.slice(4))}</h3>`); continue; }
-        if (/^## /.test(line))  { out.push(`<h2>${inline(line.slice(3))}</h2>`); continue; }
-        if (/^# /.test(line))   { out.push(`<h1>${inline(line.slice(2))}</h1>`); continue; }
-        const task = line.match(/^- \[([ x~])\] (\d+)\. (.+)/);
-        if (task) {
-            const st = task[1] === 'x' ? 'done' : task[1] === '~' ? 'inprogress' : 'pending';
-            const ic = task[1] === 'x' ? '✓' : task[1] === '~' ? '◐' : '○';
-            out.push(`<div class="task ${st}"><span class="ti">${ic}</span><span class="tn">${task[2]}.</span><span class="tt">${inline(task[3])}</span></div>`);
-            continue;
-        }
-        if (/^\s+- _Requirements:/.test(line)) { out.push(`<div class="req">${inline(line.trim().slice(2))}</div>`); continue; }
-        if (/^\s+- /.test(line))               { out.push(`<div class="detail">· ${inline(line.trim().slice(2))}</div>`); continue; }
-        if (/^- /.test(line))                  { out.push(`<li>${inline(line.slice(2))}</li>`); continue; }
-        if (!line.trim())                       { out.push('<div class="gap"></div>'); continue; }
-        out.push(`<p>${inline(line)}</p>`);
-    }
-    return out.join('\n');
-}

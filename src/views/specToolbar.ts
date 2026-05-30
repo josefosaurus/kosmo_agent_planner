@@ -16,7 +16,8 @@ type PanelState =
     | { phase: 'generating'; step: StepKey }
     | { phase: 'review';     step: StepKey; content: string }
     | { phase: 'complete';   content: string }
-    | { phase: 'view';       step: StepKey; content: string };
+    | { phase: 'view';       step: StepKey; content: string }
+    | { phase: 'error';      step: StepKey; message: string };
 
 export interface SpecInfo {
     specName: string;
@@ -82,12 +83,11 @@ export class SpecToolbarPanel {
 
     static showExisting(info: SpecInfo): void {
         const p = SpecToolbarPanel.instance;
-        if (!p) return; // only update if panel already open; don't auto-create on file focus
+        if (!p) return;
         if (p.state.phase === 'generating') return;
         p.specName = info.specName;
         p.specDir  = info.specDir;
         p.panel.title = `Kosmo · ${info.specName}`;
-        // update content silently — no reveal, don't steal tab focus
         void p.loadView(info.step);
     }
 
@@ -112,11 +112,7 @@ export class SpecToolbarPanel {
                 ? { phase: 'complete', content }
                 : { phase: 'review', step, content };
         } catch (err) {
-            vscode.window.showErrorMessage(`Kosmo: Generation failed — ${(err as Error).message}`);
-            const prev = STEPS.findIndex(s => s.key === step);
-            this.state = prev > 0
-                ? { phase: 'review', step: STEPS[prev - 1].key, content: this.requirements }
-                : { phase: 'view', step: 'requirements', content: '' };
+            this.state = { phase: 'error', step, message: (err as Error).message };
         }
         this.render();
     }
@@ -130,12 +126,32 @@ export class SpecToolbarPanel {
 
     // ── messages from webview ─────────────────────────────────────────────────
 
-    private async onMessage(msg: { command: string; step?: StepKey }): Promise<void> {
+    private async onMessage(msg: { command: string; step?: StepKey; content?: string }): Promise<void> {
         if (msg.command === 'approve') {
             const current = this.state;
             if (current.phase !== 'review') return;
+            // persist user edits before generating next step
+            if (msg.content !== undefined) {
+                await fs.writeFile(path.join(this.specDir, `${current.step}.md`), msg.content, 'utf8');
+                if (current.step === 'requirements') this.requirements = msg.content;
+                else if (current.step === 'design') this.design = msg.content;
+            }
             const next = STEPS[STEPS.findIndex(s => s.key === current.step) + 1];
             if (next) void this.runStep(next.key);
+        } else if (msg.command === 'contentChanged') {
+            // auto-save edits in view mode
+            const current = this.state;
+            if (msg.content !== undefined && current.phase === 'view') {
+                try { await fs.writeFile(path.join(this.specDir, `${current.step}.md`), msg.content, 'utf8'); } catch { /* ok */ }
+            }
+        } else if (msg.command === 'openPreview') {
+            const step = (this.state as { step?: StepKey }).step ?? 'requirements';
+            const filePath = path.join(this.specDir, `${step}.md`);
+            await vscode.commands.executeCommand('markdown.showPreview', vscode.Uri.file(filePath));
+        } else if (msg.command === 'retry') {
+            const current = this.state;
+            if (current.phase !== 'error') return;
+            void this.runStep(current.step);
         } else if (msg.command === 'openStep' && msg.step) {
             void this.loadView(msg.step);
         } else if (msg.command === 'sync') {
@@ -173,12 +189,11 @@ export class SpecToolbarPanel {
     private buildHtml(): string {
         const s = this.state;
         const currentStep: StepKey = s.phase === 'complete' ? 'tasks'
-            : s.phase === 'generating' || s.phase === 'review' || s.phase === 'view' ? s.step
+            : (s.phase === 'generating' || s.phase === 'review' || s.phase === 'view' || s.phase === 'error') ? s.step
             : 'requirements';
         const currentIdx = STEPS.findIndex(x => x.key === currentStep);
 
-        // Step badges — locked if ahead of current in new-spec flow
-        const isNewFlow = s.phase === 'generating' || s.phase === 'review';
+        const isNewFlow = s.phase === 'generating' || s.phase === 'review' || s.phase === 'error';
         const stepsHtml = STEPS.map((x, i) => {
             const active  = i === currentIdx;
             const done    = i < currentIdx;
@@ -191,27 +206,40 @@ export class SpecToolbarPanel {
                     </button>${i < 2 ? `<span class="sep">›</span>` : ''}`;
         }).join('');
 
-        // Right-side action button
         let actionBtn = '';
         if (s.phase === 'generating') {
             actionBtn = `<button class="btn-primary" disabled><span class="spin">◌</span> Generating…</button>`;
         } else if (s.phase === 'review') {
-            const nextLabel = s.step === 'requirements' ? 'Generate Design' : 'Generate Tasks';
-            actionBtn = `<button class="btn-primary" onclick="approve()">Approve → ${nextLabel}</button>`;
+            actionBtn = `<button class="btn-primary" onclick="approve()">Continue <span style="opacity:.7">→</span></button>`;
         } else if (s.phase === 'complete') {
             actionBtn = `<button class="btn-primary" disabled>✓ Complete</button>`;
-        } else {
-            actionBtn = ``;
+        } else if (s.phase === 'error') {
+            actionBtn = `<button class="btn-primary" onclick="retry()">↺ Retry</button>`;
         }
 
-        // Content area
-        let bodyHtml = '';
+        // ── main content area ──────────────────────────────────────────────────
+        const eyeIcon = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`;
+
+        let mainHtml = '';
         if (s.phase === 'generating') {
             const label = STEPS.find(x => x.key === s.step)?.label ?? '';
-            bodyHtml = `<div class="loading"><div class="spinner"></div><p>Generating ${label}…</p></div>`;
+            mainHtml = `<div class="main"><div class="content"><div class="loading"><div class="spinner"></div><p>Generating ${label}…</p></div></div></div>`;
+        } else if (s.phase === 'error') {
+            mainHtml = `<div class="main"><div class="content"><div class="error-box"><strong>Generation failed</strong><pre>${s.message}</pre></div></div></div>`;
         } else {
-            const content = s.phase === 'complete' ? s.content : s.content;
-            bodyHtml = content ? this.renderMarkdown(content) : `<p class="empty">No content yet.</p>`;
+            const content = (s as { content?: string }).content ?? '';
+            if (!content) {
+                mainHtml = `<div class="main"><div class="content"><p class="empty">No content yet.</p></div></div>`;
+            } else {
+                const escaped = content.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                mainHtml = `<div class="main">
+  <div class="editor-wrap">
+    <pre id="ln" aria-hidden="true"></pre>
+    <textarea id="ed" spellcheck="false" autocorrect="off" autocapitalize="off">${escaped}</textarea>
+  </div>
+  <button class="preview-btn" onclick="openPreview()">${eyeIcon}&nbsp;Open Preview</button>
+</div>`;
+            }
         }
 
         return /* html */`<!DOCTYPE html><html><head><meta charset="utf-8">
@@ -225,9 +253,14 @@ export class SpecToolbarPanel {
     font-size: var(--vscode-editor-font-size, 14px);
     line-height: 1.7;
   }
+
+  /* ── main wrapper ─────────────────────────────────────────────────────── */
+  .main { position: relative; flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+  /* ── prose content (preview / error / loading) ────────────────────────── */
   .content {
     flex: 1; overflow-y: auto;
-    padding: 28px 40px 20px;
+    padding: 28px 40px 80px;
     max-width: 860px; width: 100%; margin: 0 auto;
   }
   h1 { font-size: 1.45em; font-weight: 700; margin-bottom: 14px; }
@@ -244,7 +277,48 @@ export class SpecToolbarPanel {
   .gap { height: 6px; }
   .empty { opacity: .4; font-style: italic; margin-top: 40px; text-align: center; }
 
-  /* tasks */
+  /* ── code editor ──────────────────────────────────────────────────────── */
+  .editor-wrap {
+    flex: 1; display: flex; overflow: hidden;
+    font-family: var(--vscode-editor-font-family, 'Menlo', 'Monaco', 'Courier New', monospace);
+    font-size: 13px; line-height: 20px;
+  }
+  #ln {
+    width: 52px; flex-shrink: 0;
+    padding: 14px 10px 20px 0;
+    text-align: right;
+    color: rgba(128,128,128,.5);
+    border-right: 1px solid rgba(255,255,255,.06);
+    user-select: none; overflow: hidden;
+    white-space: pre;
+    font-family: inherit; font-size: 13px; line-height: 20px;
+  }
+  #ed {
+    flex: 1; background: transparent;
+    color: var(--vscode-editor-foreground);
+    border: none; outline: none; resize: none;
+    padding: 14px 40px 60px 16px;
+    overflow-y: auto; overflow-x: auto;
+    white-space: pre; overflow-wrap: normal;
+    font-family: inherit; font-size: 13px; line-height: 20px;
+    tab-size: 2; caret-color: #7c3aed;
+  }
+
+  /* ── floating toggle button ───────────────────────────────────────────── */
+  .preview-btn {
+    position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 7px 18px; border-radius: 20px;
+    border: 1px solid rgba(255,255,255,.18);
+    background: rgba(15,15,15,.88); backdrop-filter: blur(8px);
+    color: rgba(255,255,255,.8); cursor: pointer;
+    font-size: 12px; font-family: var(--vscode-font-family);
+    white-space: nowrap; z-index: 10;
+    transition: background .15s;
+  }
+  .preview-btn:hover { background: rgba(40,40,40,.95); color: #fff; }
+
+  /* ── tasks ────────────────────────────────────────────────────────────── */
   .task { display: flex; align-items: baseline; gap: 9px; padding: 4px 0; }
   .ti { font-size: 13px; width: 15px; flex-shrink: 0; }
   .tn { opacity: .35; font-size: .82em; flex-shrink: 0; }
@@ -256,22 +330,24 @@ export class SpecToolbarPanel {
   .detail { padding: 1px 0 1px 24px; font-size: .87em; opacity: .5; }
   .req    { padding: 1px 0 4px 24px; font-size: .8em; opacity: .38; font-style: italic; }
 
-  /* loading */
+  /* ── error / loading ──────────────────────────────────────────────────── */
+  .error-box { margin-top: 40px; padding: 20px 24px; border-radius: 8px; background: rgba(220,50,50,.12); border: 1px solid rgba(220,50,50,.3); }
+  .error-box strong { color: #f87171; font-size: .95em; }
+  .error-box pre { margin: 10px 0 0; font-size: .82em; white-space: pre-wrap; opacity: .85; }
   .loading { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; gap: 16px; opacity: .6; }
   .spinner {
     width: 28px; height: 28px; border-radius: 50%;
-    border: 2px solid rgba(255,255,255,.15);
-    border-top-color: #7c3aed;
+    border: 2px solid rgba(255,255,255,.15); border-top-color: #7c3aed;
     animation: spin .8s linear infinite;
   }
   @keyframes spin { to { transform: rotate(360deg); } }
   .loading p { font-size: 13px; }
 
-  /* toolbar */
+  /* ── toolbar ──────────────────────────────────────────────────────────── */
   .toolbar {
     flex-shrink: 0; height: 46px;
     display: flex; align-items: center; padding: 0 16px; gap: 12px;
-    border-top: 1px solid var(--vscode-panel-border, rgba(255,255,255,.1));
+    border-bottom: 1px solid var(--vscode-panel-border, rgba(255,255,255,.1));
     background: var(--vscode-editor-background);
   }
   .spec-name {
@@ -283,10 +359,8 @@ export class SpecToolbarPanel {
   .step {
     display: inline-flex; align-items: center; gap: 7px;
     padding: 4px 12px 4px 7px; border-radius: 6px;
-    border: 1px solid rgba(255,255,255,.1);
-    background: rgba(255,255,255,.05);
-    color: var(--vscode-foreground);
-    cursor: pointer; font-size: 12px; font-family: inherit;
+    border: 1px solid rgba(255,255,255,.1); background: rgba(255,255,255,.05);
+    color: var(--vscode-foreground); cursor: pointer; font-size: 12px; font-family: inherit;
   }
   .step:hover:not(.active):not(:disabled) { filter: brightness(1.3); }
   .step.active  { background: #5b21b6; color: #fff; border-color: #7c3aed; }
@@ -317,7 +391,6 @@ export class SpecToolbarPanel {
   .spin { display: inline-block; animation: spin .8s linear infinite; }
 </style>
 </head><body>
-  <div class="content">${bodyHtml}</div>
   <div class="toolbar">
     <div class="spec-name">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" opacity=".7">
@@ -332,11 +405,36 @@ export class SpecToolbarPanel {
       ${actionBtn}
     </div>
   </div>
+  ${mainHtml}
   <script>
     const vscode = acquireVsCodeApi();
-    function approve()    { vscode.postMessage({ command: 'approve' }); }
-    function openStep(s)  { vscode.postMessage({ command: 'openStep', step: s }); }
-    function sync()       { vscode.postMessage({ command: 'sync' }); }
+    const ed = document.getElementById('ed');
+    const ln = document.getElementById('ln');
+
+    if (ed && ln) {
+      updateLineNumbers(ed.value);
+      ed.addEventListener('scroll', () => { ln.scrollTop = ed.scrollTop; });
+      let debTimer;
+      ed.addEventListener('input', () => {
+        updateLineNumbers(ed.value);
+        clearTimeout(debTimer);
+        debTimer = setTimeout(() => {
+          vscode.postMessage({ command: 'contentChanged', content: ed.value });
+        }, 600);
+      });
+    }
+
+    function updateLineNumbers(text) {
+      if (!ln) return;
+      const count = (text || '').split('\\n').length;
+      ln.textContent = Array.from({ length: count }, (_, i) => i + 1).join('\\n');
+    }
+
+    function approve()      { vscode.postMessage({ command: 'approve', content: ed ? ed.value : undefined }); }
+    function retry()        { vscode.postMessage({ command: 'retry' }); }
+    function openStep(s)    { vscode.postMessage({ command: 'openStep', step: s }); }
+    function sync()         { vscode.postMessage({ command: 'sync' }); }
+    function openPreview()  { vscode.postMessage({ command: 'openPreview' }); }
   </script>
 </body></html>`;
     }
