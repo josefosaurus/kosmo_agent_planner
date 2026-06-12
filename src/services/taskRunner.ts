@@ -5,7 +5,7 @@ import * as path from 'path';
 import { TaskItem } from '../views/tasksDataProvider';
 import { markDone, markPending } from './taskTracker';
 import { workspaceRoot } from '../utils/fileSystem';
-import { ModelTier, resolveModelFlag } from './llmCli';
+import { ModelTier, resolveModelFlag, getSelectedCli } from './llmCli';
 import { parseRequirementsRefs, pruneRequirements } from '../utils/contextPruner';
 import { resolveTaskTier } from '../utils/taskTier';
 export { resolveTaskTier };
@@ -31,6 +31,8 @@ export async function runTask(item: TaskItem): Promise<void> {
     const cwd = workspaceRoot();
     if (!cwd) { vscode.window.showErrorMessage('No workspace folder open.'); return; }
 
+    const adapter = await getSelectedCli();
+
     let requirements = '';
     let design = '';
     try {
@@ -46,7 +48,7 @@ export async function runTask(item: TaskItem): Promise<void> {
 
     const channel = vscode.window.createOutputChannel(`Kosmo: ${item.label}`);
     channel.show(true);
-    channel.appendLine(`▶ ${item.label} [${tier}]`);
+    channel.appendLine(`▶ ${item.label} [${tier}] using ${adapter.label}`);
 
     guardClaudeMdSize(claudeMd, channel);
 
@@ -67,33 +69,42 @@ export async function runTask(item: TaskItem): Promise<void> {
 
     const cleanup = () => { clearInterval(ticker); statusBar.dispose(); };
 
+    const modelArgs = resolveModelFlag(adapter.bin, tier);
+    const args = [...adapter.args(prompt, 'task'), ...modelArgs];
+
     const proc = cp.spawn(
-        'claude',
-        ['-p', prompt, '--output-format', 'stream-json', '--verbose', ...resolveModelFlag('claude', tier)],
+        adapter.bin,
+        args,
         { cwd, env: process.env, stdio: ['ignore', 'pipe', 'pipe'] }
     );
     runningProcs.set(key, proc);
 
     let buf = '';
     proc.stdout.on('data', (chunk: Buffer) => {
-        buf += chunk.toString();
-        const lines = buf.split('\n');
-        buf = lines.pop() ?? '';
-        for (const line of lines) {
-            const parsed = parseLine(line);
-            if (!parsed) continue;
-            if (parsed.type === 'tool') {
-                action = parsed.label;
-                channel.appendLine(`  ${parsed.label}`);
-            } else if (parsed.type === 'error') {
-                channel.appendLine(`  ! ${parsed.message}`);
-            } else if (parsed.type === 'cost') {
-                cost = parsed.value;
+        const text = chunk.toString();
+        if (adapter.supportsStreaming) {
+            buf += text;
+            const lines = buf.split('\n');
+            buf = lines.pop() ?? '';
+            for (const line of lines) {
+                const parsed = parseLine(line);
+                if (!parsed) continue;
+                if (parsed.type === 'tool') {
+                    action = parsed.label;
+                    channel.appendLine(`  ${parsed.label}`);
+                } else if (parsed.type === 'error') {
+                    channel.appendLine(`  ! ${parsed.message}`);
+                } else if (parsed.type === 'cost') {
+                    cost = parsed.value;
+                }
             }
+        } else {
+            // Non-streaming fallback: just log raw output
+            channel.append(text);
         }
     });
 
-    // stderr = raw claude errors (rate limits, auth, etc.) — show them all
+    // stderr = raw errors (rate limits, auth, etc.) — show them all
     proc.stderr.on('data', (chunk: Buffer) => {
         const text = chunk.toString().trim();
         if (text) channel.appendLine(`  ! ${text}`);
@@ -103,7 +114,7 @@ export async function runTask(item: TaskItem): Promise<void> {
         cleanup();
         runningProcs.delete(key);
         const msg = (err as NodeJS.ErrnoException).code === 'ENOENT'
-            ? 'claude not found — install Claude Code: https://claude.ai/code'
+            ? `${adapter.bin} not found — check your PATH or select another CLI.`
             : err.message;
         channel.appendLine('');
         channel.appendLine(`✗ ${msg}`);

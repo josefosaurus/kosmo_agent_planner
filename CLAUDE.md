@@ -15,6 +15,10 @@ npm run watch        # watch mode for dev
 npm run lint         # lint
 npm run package      # create .vsix
 npm test             # compile + run node:test suite
+npm run screenshots  # capture marketplace screenshots via Playwright
+
+# run a single test by name pattern (after compile):
+node --test out/test/suite.test.js --test-name-pattern "pruneRequirements"
 ```
 
 Press **F5** in VSCode to launch Extension Development Host.
@@ -24,9 +28,9 @@ Press **F5** in VSCode to launch Extension Development Host.
 **Entry point**: `src/extension.ts` — registers commands, views, providers, and a `FileSystemWatcher` on `**/.kosmo/specs/**/tasks.md` that auto-refreshes the sidebar.
 
 **Core flow**:
-1. "Kosmo: New Spec" → user inputs goal → `SpecToolbarPanel` (webview) drives a 3-step review flow: requirements → design → tasks, each generated via `specGenerator` → `runWithCli()`
+1. "Kosmo: New Spec" → user inputs goal → `SpecToolbarPanel` (webview) drives a 3-step generation+review flow: requirements → design → tasks, each generated via `specGenerator` → `runWithCli()`
 2. `TasksDataProvider` parses `tasks.md` and populates sidebar tree grouped by spec folder
-3. User clicks "▶ Start task" (CodeLens on tasks.md or sidebar inline button)
+3. User clicks "▶ Start task" (CodeLens on tasks.md, sidebar inline button, or custom editor task bar)
 4. `taskRunner` spawns `claude -p <prompt> --output-format stream-json --verbose` and streams tool-use events to an Output Channel
 5. On exit code 0, `taskTracker.markDone` rewrites the task checkbox in tasks.md via regex; kill or failure reverts to `[ ]`
 
@@ -39,15 +43,21 @@ Press **F5** in VSCode to launch Extension Development Host.
   tasks.md
 ```
 
+## Two webview systems
+
+**`SpecToolbarPanel`** (`src/views/specToolbar.ts`) — singleton panel used during **spec creation**. States: `generating → review → [approve] → generating next step → complete → error`. "Sync Files" re-runs all three generation steps from `goal.txt`. `specInfoFromUri()` maps an open spec file URI to `{ specName, specDir, step }` — used to update the panel when the user opens a spec file.
+
+**`SpecCustomEditorProvider`** (`src/views/specCustomEditor.ts`) — registered as `kosmo.specEditor` custom editor for `requirements.md`, `design.md`, and `tasks.md`. Opens automatically when the user opens any spec file (replaces the default text editor). Renders a textarea with line numbers, a step-navigation toolbar (Requirements › Design › Task list), and sync/continue buttons. For `tasks.md`, also renders a task action bar: pending tasks show a ▶ start button; running tasks show a ⏹ kill button. Edits are debounced 400 ms then applied via `WorkspaceEdit`. The "Open Preview" floating button opens the standard markdown preview.
+
 ## Multi-LLM CLI layer (`src/services/llmCli.ts`)
 
 **Spec generation** uses any detected CLI via `runWithCli(prompt, cwd, tier?)`. The selected CLI is saved in `kosmo.specCli` (VSCode config). Auto-detected from PATH on first run; user can override via "Kosmo: Select AI CLI".
 
 **Task execution** always uses `claude` subprocess directly — other CLIs lack Claude Code's built-in tooling (Read/Write/Edit/Bash).
 
-**`KNOWN_CLIS`** — adapters for: `claude`, `gemini`, `codex`, `opencode`, `deepseek`, `llm`, `sgpt`, `subq`, `miami`. Each adapter defines `args(prompt)` and optionally `wrapPrompt` (forces text output) and `trustGate` (retry with extra args after specific exit code, e.g. Gemini exits 55 without trust).
+**`KNOWN_CLIS`** — adapters for: `claude`, `gemini`, `codex`, `opencode`, `deepseek`, `llm`, `sgpt`, `subq`, `miami`. Each adapter defines `args(prompt)` and optionally `wrapPrompt` (forces text output instead of file-tool calls — used by `gemini` and `opencode`) and `trustGate` (retry with extra args after specific exit code, e.g. Gemini exits 55 without trust). `opencode` uses `['run', p]` args (not `-p`).
 
-**Model tiers** (`ModelTier = 'haiku' | 'sonnet' | 'opus'`): `resolveModelFlag(cliBin, tier)` maps tiers to CLI-specific `--model` flags. Gemini returns empty flags (uses CLI default). Spec generation calls at `opus` tier; task execution tier is resolved per-task.
+**Model tiers** (`ModelTier = 'haiku' | 'sonnet' | 'opus'`): `resolveModelFlag(cliBin, tier)` maps tiers to CLI-specific flags. `claude` uses `--model claude-*`; `opencode` uses `-m anthropic/claude-*`; `codex` maps to `gpt-4o-mini/gpt-4o/o3`; `deepseek` maps haiku+sonnet to `deepseek-chat`, opus to `deepseek-reasoner`; Gemini returns empty (uses CLI default). Spec generation calls at `opus` tier; task execution tier is resolved per-task.
 
 ## Task model tier (`src/utils/taskTier.ts`)
 
@@ -57,15 +67,11 @@ Press **F5** in VSCode to launch Extension Development Host.
 
 Each task may have `  - _Requirements: 1.1, 1.2_`. `pruneRequirements(content, refs)` extracts only the referenced `### N.N` subsections from `requirements.md`, reducing prompt size. Falls back to full content if no refs match.
 
-## SpecToolbarPanel (`src/views/specToolbar.ts`)
-
-Single-instance webview panel. States: `generating → review → [approve] → generating next step → complete`. Error state shows retry button. "Sync Files" re-runs all three generation steps from `goal.txt`. `specInfoFromUri()` maps an open spec file URI to `{ specName, specDir, step }` — used to update the panel when the user opens a spec file.
-
 ## Key implementation details
 
 **Task state regex** (`taskTracker.ts`): `^(- \[)[ ~x](\] N\.)` where N is the integer task index. The index must match the number prefix in `N. Task title` exactly.
 
-**Running process tracking** (`taskRunner.ts`): module-level `Map<string, ChildProcess>` keyed by `tasksFilePath:taskIndex`. `isRunning()` checks this map; sidebar shows kill button for `inprogressTask` context value.
+**Running process tracking** (`taskRunner.ts`): module-level `Map<string, ChildProcess>` keyed by `tasksFilePath:taskIndex`. `isRunning()` checks this map; sidebar and custom editor both use it to decide which button to render.
 
 **NDJSON streaming** (`taskRunner.ts`): parses `--output-format stream-json` lines. `type === 'assistant'` → extract `tool_use` block → `toolLabel(name, input)`. `type === 'result'` → extract `cost_usd` and error subtype.
 
@@ -76,6 +82,8 @@ Single-instance webview panel. States: `generating → review → [approve] → 
 **CLAUDE.md guard** (`taskRunner.ts`): `guardClaudeMdSize` warns in Output Channel if the user's CLAUDE.md exceeds ~2000 tokens before injecting it into the task prompt.
 
 **Discover command** (`src/commands/discover.ts`): runs `subq` or `miami` CLI with a freetext query, streams output to a channel, then offers copy-to-clipboard or "New Spec with this context".
+
+**Delete spec** (`kosmo.deleteSpec`): prompts for confirmation then `fs.rm(specDir, { recursive: true })`. Registered on `specGroup` context value in the sidebar.
 
 ## Spec file formats
 

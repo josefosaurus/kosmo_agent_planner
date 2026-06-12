@@ -29,6 +29,11 @@ const CLI_MODEL_FLAGS: Partial<Record<string, Record<ModelTier, string[]>>> = {
         sonnet: ['--model', 'gpt-4o'],
         opus:   ['--model', 'o3'],
     },
+    opencode: {
+        haiku:  ['-m', 'anthropic/claude-haiku-4-5-20251001'],
+        sonnet: ['-m', 'anthropic/claude-sonnet-4-6'],
+        opus:   ['-m', 'anthropic/claude-opus-4-7'],
+    },
     deepseek: {
         haiku:  ['--model', 'deepseek-chat'],
         sonnet: ['--model', 'deepseek-chat'],
@@ -56,10 +61,11 @@ interface TrustGate {
  * Some CLIs are agents that write files via tool calls instead of printing
  * to stdout. `wrapPrompt` adapts the prompt to request plain-text output.
  */
-interface CliAdapter {
+export interface CliAdapter {
     bin: string;
     label: string;
-    args: (prompt: string) => string[];
+    args: (prompt: string, mode: 'spec' | 'task') => string[];
+    supportsStreaming: boolean;
     wrapPrompt?: (prompt: string) => string;
     trustGate?: TrustGate;
 }
@@ -68,13 +74,22 @@ const KNOWN_CLIS: CliAdapter[] = [
     {
         bin: 'claude',
         label: 'Claude Code (claude)',
-        args: p => ['-p', p],
+        supportsStreaming: true,
+        args: (p, mode) => {
+            const base = ['-p', p];
+            if (mode === 'task') base.push('--output-format', 'stream-json', '--verbose');
+            return base;
+        },
     },
     {
         bin: 'gemini',
         label: 'Gemini CLI (gemini)',
+        supportsStreaming: true,
         // --output-format text → clean text, no ANSI tables or JSON wrappers
-        args: p => ['-p', p, '--output-format', 'text'],
+        args: (p, mode) => {
+            if (mode === 'task') return ['-p', p, '--output-format', 'stream-json', '--verbose'];
+            return ['-p', p, '--output-format', 'text'];
+        },
         // Gemini CLI is an agent that tries to write files via tools.
         // We instruct the model to output text directly instead.
         wrapPrompt: p =>
@@ -91,13 +106,29 @@ const KNOWN_CLIS: CliAdapter[] = [
             extraArgs: ['--skip-trust'],
         },
     },
-    { bin: 'codex',    label: 'OpenAI Codex (codex)',     args: p => [p] },
-    { bin: 'opencode', label: 'OpenCode (opencode)',       args: p => [p] },
-    { bin: 'deepseek', label: 'DeepSeek CLI (deepseek)',  args: p => [p] },
-    { bin: 'llm',      label: 'llm (Simon Willison)',      args: p => [p] },
-    { bin: 'sgpt',     label: 'ShellGPT (sgpt)',           args: p => [p] },
-    { bin: 'subq',     label: 'SubQ / Miami (subq)',       args: p => [p] },
-    { bin: 'miami',    label: 'Miami (miami)',              args: p => [p] },
+    {
+        bin: 'codex',
+        label: 'OpenAI Codex (codex)',
+        supportsStreaming: false,
+        args: p => [p],
+    },
+    {
+        bin: 'opencode',
+        label: 'OpenCode (opencode)',
+        supportsStreaming: true,
+        args: (p, mode) => {
+            if (mode === 'task') return ['run', p, '--output-format', 'stream-json', '--verbose'];
+            return ['run', p];
+        },
+        // opencode is an agent — instruct the model to return plain text, not use file tools
+        wrapPrompt: p =>
+            `${p}\n\nIMPORTANT: Output the complete document as plain text in your response. Do NOT use write_file, create_file, edit, str_replace, or any other file-system tools.`,
+    },
+    { bin: 'deepseek', label: 'DeepSeek CLI (deepseek)',  supportsStreaming: false, args: p => [p] },
+    { bin: 'llm',      label: 'llm (Simon Willison)',      supportsStreaming: false, args: p => [p] },
+    { bin: 'sgpt',     label: 'ShellGPT (sgpt)',           supportsStreaming: false, args: p => [p] },
+    { bin: 'subq',     label: 'SubQ / Miami (subq)',       supportsStreaming: false, args: p => [p] },
+    { bin: 'miami',    label: 'Miami (miami)',              supportsStreaming: false, args: p => [p] },
 ];
 
 export function isInPath(bin: string): Promise<boolean> {
@@ -137,7 +168,7 @@ export async function selectCli(): Promise<void> {
     vscode.window.showInformationMessage(`Kosmo: using ${pick.label} for spec generation.`);
 }
 
-async function getSelectedCli(): Promise<CliAdapter> {
+export async function getSelectedCli(): Promise<CliAdapter> {
     const config = vscode.workspace.getConfiguration();
     const saved = config.get<string>(CONFIG_KEY);
 
@@ -211,7 +242,7 @@ export async function runWithCli(prompt: string, cwd: string, tier?: ModelTier):
     const cli = await getSelectedCli();
     const finalPrompt = cli.wrapPrompt ? cli.wrapPrompt(prompt) : prompt;
     const modelArgs = resolveModelFlag(cli.bin, tier ?? 'sonnet');
-    const baseArgs = [...cli.args(finalPrompt), ...modelArgs];
+    const baseArgs = [...cli.args(finalPrompt, 'spec'), ...modelArgs];
 
     try {
         return await spawnCli(cli, baseArgs, cwd);
