@@ -82,8 +82,17 @@
         }
       }
     },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "kosmo",
+          "title": "Kosmo",
+          "icon": "kosmo.svg"
+        }
+      ]
+    },
     "views": {
-      "explorer": [
+      "kosmo": [
         {
           "id": "kosmoTasks",
           "name": "Kosmo Tasks",

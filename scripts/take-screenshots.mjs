@@ -248,7 +248,7 @@ html, body { height: 100%; }
     </div>
 
     <div class="sidebar">
-      <div class="sidebar-section-title">Explorer</div>
+      <div class="sidebar-section-title">Kosmo</div>
       <div class="panel-header">
         Kosmo Tasks
         <div class="panel-header-icons">
