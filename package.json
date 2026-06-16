@@ -2,7 +2,7 @@
   "name": "kosmo-sidekick",
   "displayName": "Kosmo Sidekick",
   "description": "Spec-driven development with Claude Code CLI. Generate requirements, design, and tasks from a goal — then run each task as an isolated AI agent.",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "publisher": "josefosaurus",
   "license": "MIT",
   "repository": {
