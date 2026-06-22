@@ -2,7 +2,7 @@
   "name": "kosmo-sidekick",
   "displayName": "Kosmo Sidekick",
   "description": "Spec-driven development with Claude Code CLI. Generate requirements, design, and tasks from a goal — then run each task as an isolated AI agent.",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "publisher": "josefosaurus",
   "license": "MIT",
   "repository": {
@@ -169,6 +169,7 @@
     "@types/vscode": "^1.75.0",
     "@typescript-eslint/eslint-plugin": "^6.0.0",
     "@typescript-eslint/parser": "^6.0.0",
+    "@vscode/vsce": "^3.9.2",
     "eslint": "^8.0.0",
     "playwright": "^1.59.1",
     "typescript": "^5.0.0"
