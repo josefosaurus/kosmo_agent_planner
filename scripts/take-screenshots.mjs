@@ -332,9 +332,10 @@ html, body { height: 100%; }
         <div class="line"><span class="ln">21</span><span class="c-lens">&nbsp;&nbsp;▶ Start task</span></div>
         <div class="line"><span class="ln">22</span><span class="c-pend">- [ ] 4. Rate limiting middleware</span></div>
         <div class="line"><span class="ln">23</span><span class="c-detail">&nbsp;&nbsp;- Sliding window counter per IP</span></div>
-        <div class="line"><span class="ln">24</span><span class="c-req">&nbsp;&nbsp;- _Requirements: 3.1_</span></div>
-        <div class="line"><span class="ln">25</span></div>
-        <div class="line"><span class="ln">26</span><span class="c-lens">&nbsp;&nbsp;▶ Start task</span></div>
+        <div class="line"><span class="ln">24</span><span class="c-req">&nbsp;&nbsp;- [model:haiku]</span></div>
+        <div class="line"><span class="ln">25</span><span class="c-req">&nbsp;&nbsp;- _Requirements: 3.1_</span></div>
+        <div class="line"><span class="ln">26</span></div>
+        <div class="line"><span class="ln">27</span><span class="c-lens">&nbsp;&nbsp;▶ Start task</span></div>
       </div>
     </div>
   </div>
@@ -451,8 +452,16 @@ ${BASE_CSS}
         <span class="qp-item-label">llm (Simon Willison)</span>
         <span class="qp-item-desc">llm</span>
       </div>
+      <div class="qp-item">
+        <span class="qp-item-label">ShellGPT (sgpt)</span>
+        <span class="qp-item-desc">sgpt</span>
+      </div>
+      <div class="qp-item">
+        <span class="qp-item-label">SubQ / Miami (subq)</span>
+        <span class="qp-item-desc">subq</span>
+      </div>
     </div>
-    <div class="qp-hint">Only CLIs found in PATH are shown · Change anytime via "Kosmo: Select AI CLI"</div>
+    <div class="qp-hint">Only CLIs found in PATH are shown · Change anytime via "Kosmo: Select AI CLI" · subq/miami also power Discover</div>
   </div>
 </div>
 
@@ -463,11 +472,113 @@ ${BASE_CSS}
 </div>
 </body></html>`;
 
+// ─── output.png ───────────────────────────────────────────────────────────────
+
+const OUTPUT = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+${BASE_CSS}
+html, body { height: 100%; }
+.window { display: flex; flex-direction: column; height: 100%; }
+.tabs-bar {
+  display: flex; background: #2d2d2d;
+  border-bottom: 1px solid #1a1a1a; height: 35px; align-items: flex-end;
+}
+.tab {
+  padding: 7px 14px; font-size: 13px; cursor: pointer;
+  border-right: 1px solid #252526; color: #858585; background: #2d2d2d;
+}
+.tab.active { background: #1e1e1e; color: #cccccc; border-top: 1px solid #007acc; }
+.panel { display: flex; flex-direction: column; flex: 1; background: #1e1e1e; overflow: hidden; }
+.panel-tabs {
+  display: flex; background: #252526; border-bottom: 1px solid #3c3c3c;
+}
+.panel-tab {
+  padding: 6px 16px; font-size: 12px; color: #858585; cursor: pointer;
+  border-bottom: 2px solid transparent; text-transform: uppercase; letter-spacing: 0.05em;
+}
+.panel-tab.active { color: #e8e8e8; border-bottom-color: #e8e8e8; }
+.output-header {
+  display: flex; align-items: center; gap: 10px;
+  padding: 4px 10px; background: #252526; border-bottom: 1px solid #3c3c3c;
+  font-size: 12px; color: #aaa;
+}
+.channel-label {
+  background: #3c3c3c; border: 1px solid #555; color: #ccc;
+  font-size: 12px; padding: 2px 8px; border-radius: 3px;
+}
+.output-body {
+  flex: 1; padding: 10px 14px;
+  font-family: 'Cascadia Code', Consolas, monospace; font-size: 12.5px; line-height: 20px;
+  overflow-y: auto;
+}
+.c-title { color: #569cd6; font-weight: bold; }
+.c-sep   { color: #444; }
+.c-tool  { color: #9cdcfe; }
+.c-cmd   { color: #b5cea8; }
+.c-write { color: #4ec9b0; }
+.c-ok    { color: #4ec994; font-weight: bold; }
+.c-dim   { color: #4a4a4a; }
+.c-tier  { color: #c586c0; }
+.statusbar {
+  height: 22px; background: #007acc;
+  display: flex; align-items: center; padding: 0 10px;
+  font-size: 12px; color: #ffffff; gap: 12px;
+}
+</style></head><body>
+<div class="window">
+  <div class="tabs-bar">
+    <div class="tab">tasks.md</div>
+    <div class="tab active">requirements.md</div>
+  </div>
+  <div class="panel">
+    <div class="panel-tabs">
+      <div class="panel-tab">Problems</div>
+      <div class="panel-tab">Terminal</div>
+      <div class="panel-tab active">Output</div>
+      <div class="panel-tab">Debug Console</div>
+    </div>
+    <div class="output-header">
+      <span>Output channel:</span>
+      <span class="channel-label">Kosmo: 4. Rate limiting middleware</span>
+    </div>
+    <div class="output-body mono">
+      <div><span class="c-title">▶ 4. Rate limiting middleware</span> <span class="c-tier">[sonnet]</span></div>
+      <div><span class="c-sep">────────────────────────────────────────</span></div>
+      <div>&nbsp;</div>
+      <div><span class="c-tool">&nbsp; read package.json</span></div>
+      <div><span class="c-tool">&nbsp; read src/middleware/index.ts</span></div>
+      <div><span class="c-cmd">&nbsp; $ ls src/middleware/</span></div>
+      <div><span class="c-tool">&nbsp; read src/middleware/auth.ts</span></div>
+      <div><span class="c-tool">&nbsp; read src/config/redis.ts</span></div>
+      <div>&nbsp;</div>
+      <div><span class="c-write">&nbsp; write src/middleware/rateLimit.ts</span></div>
+      <div><span class="c-cmd">&nbsp; $ npx tsc --noEmit</span></div>
+      <div><span class="c-write">&nbsp; edit src/middleware/index.ts</span></div>
+      <div>&nbsp;</div>
+      <div><span class="c-write">&nbsp; write src/middleware/rateLimit.test.ts</span></div>
+      <div><span class="c-cmd">&nbsp; $ npm test -- --testPathPattern rateLimit</span></div>
+      <div>&nbsp;</div>
+      <div><span class="c-dim">&nbsp; PASS  src/middleware/rateLimit.test.ts</span></div>
+      <div><span class="c-dim">&nbsp; &nbsp; ✓ blocks after 100 req/min (12 ms)</span></div>
+      <div><span class="c-dim">&nbsp; &nbsp; ✓ resets sliding window (8 ms)</span></div>
+      <div><span class="c-dim">&nbsp; &nbsp; ✓ returns 429 with Retry-After header (5 ms)</span></div>
+      <div>&nbsp;</div>
+      <div><span class="c-ok">✓ done · 43s · $0.0031</span></div>
+    </div>
+  </div>
+  <div class="statusbar">
+    <span>⎇ main</span>
+    <span>⊘ 0 △ 0</span>
+    <span style="margin-left:auto">Markdown &nbsp; UTF-8</span>
+  </div>
+</div>
+</body></html>`;
+
 // ─── run ──────────────────────────────────────────────────────────────────────
 
 await shot(NEWSPEC,    'newspec.png',    858, 482);
 await shot(SIDEBAR,   'sidebar.png',    912, 576);
 await shot(SELECTCLI, 'selectcli.png',  800, 450);
+await shot(OUTPUT,    'output.png',     860, 480);
 
 await browser.close();
 console.log('done →', outDir);

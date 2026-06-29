@@ -53,6 +53,8 @@ Inspired by [Kiro](https://kiro.dev/).
 | `deepseek` | DeepSeek CLI |
 | `llm` | [llm by Simon Willison](https://llm.datasette.io) |
 | `sgpt` | [ShellGPT](https://github.com/TheR1D/shell_gpt) |
+| `subq` | [SubQ](https://github.com/SubQuery/subql) |
+| `miami` | Miami CLI |
 
 > **Note:** Task execution always uses `claude` (Claude Code CLI) — it provides the Read/Write/Edit/Bash tools that run your tasks. The CLI picker only affects spec generation.
 
@@ -98,9 +100,19 @@ Click **▶** next to any `[ ]` task in the sidebar or in `tasks.md` via CodeLen
 
 A Claude Code subprocess runs the task in your workspace CWD with the full spec as context. The Output Channel streams every tool call in real time. When done, the checkbox updates to `[x]` automatically.
 
+If a task has `_Requirements: 1.1, 2.3_`, only the referenced subsections of `requirements.md` are injected into the prompt — keeping context tight for large specs.
+
 ### Kill a running task
 
 Click **⏹** next to any `[~]` task. The marker reverts to `[ ]`.
+
+### Discover
+
+**Kosmo: Discover** queries your codebase with a freetext question via `subq` or `miami` CLI (must be in PATH). Output streams to a channel; you can copy it or feed it directly into a new spec.
+
+### Edit spec files
+
+Opening any `.kosmo/specs/**/*.md` file uses Kosmo's custom editor — an editable textarea with line numbers, a step-navigation toolbar (Requirements › Design › Task list), and sync/continue buttons. Use the floating **Open Preview** button for rendered markdown.
 
 ---
 
@@ -112,10 +124,13 @@ Click **⏹** next to any `[~]` task. The marker reverts to `[ ]`.
 - [ ] 1. Task title
   - implementation detail
   - another detail
+  - [model:haiku]
   - _Requirements: 1.1, 2.3_
 ```
 
 States: `[ ]` pending · `[~]` in progress · `[x]` done
+
+**Model tiers** — add `[model:haiku]`, `[model:sonnet]`, or `[model:opus]` to any detail line to control which model runs that task. Default is `sonnet`. Use `haiku` for cheap/fast tasks (linting, formatting) and `opus` for complex reasoning tasks.
 
 ---
 
@@ -141,3 +156,5 @@ For best results, fill in the generated `CLAUDE.md` at your project root. Every 
 | `Kosmo: Kill Task` | Stop running task |
 | `Kosmo: Refresh Tasks` | Manually refresh sidebar |
 | `Kosmo: Select AI CLI` | Change which CLI is used for spec generation |
+| `Kosmo: Discover` | Query codebase via subq/miami; stream results or create new spec |
+| `Kosmo: Delete Spec` | Delete a spec folder (right-click spec in sidebar) |
