@@ -43,6 +43,18 @@ Press **F5** in VSCode to launch Extension Development Host.
   tasks.md
 ```
 
+**Source layout** (`src/`):
+- `commands/` — `newSpec.ts` (prompt user, create spec dir, launch toolbar), `startTask.ts` (mark in-progress, delegate to taskRunner)
+- `services/` — `specGenerator.ts`, `taskRunner.ts`, `taskTracker.ts`
+- `views/` — `tasksDataProvider.ts` (sidebar tree), `specToolbar.ts` (new-spec panel), `specCustomEditor.ts` (saved-spec viewer)
+- `providers/` — `codelensProvider.ts` (▶ Start task buttons on tasks.md)
+- `utils/` — `fileSystem.ts` (mkdir/write helpers), `templates.ts` (all Claude prompt strings + CLAUDE.md template)
+
+**Two webview panels**:
+- `SpecToolbarPanel` (`views/specToolbar.ts`): singleton panel launched by "New Spec"; owns the step-by-step generate → review → approve flow
+- `SpecCustomEditorProvider` (`views/specCustomEditor.ts`): registered as a custom editor for `.kosmo/specs/**/*.md`; renders saved spec files with the same markdown renderer, step nav, and sync button
+- Both render markdown to raw HTML/CSS — no external markdown library
+
 ## Two webview systems
 
 **`SpecToolbarPanel`** (`src/views/specToolbar.ts`) — singleton panel used during **spec creation**. States: `generating → review → [approve] → generating next step → complete → error`. "Sync Files" re-runs all three generation steps from `goal.txt`. `specInfoFromUri()` maps an open spec file URI to `{ specName, specDir, step }` — used to update the panel when the user opens a spec file.
@@ -78,6 +90,10 @@ Each task may have `  - _Requirements: 1.1, 1.2_`. `pruneRequirements(content, r
 **`parseTasks`** (`tasksDataProvider.ts`): exported for testing. Parses lines matching `^- \[([ x~])\] (\d+)\. (.+)`. Detail lines (`  - text`) and requirements lines (`  - _Requirements: …_`) are attached to the preceding task.
 
 **`TaskItem.contextValue`**: `pendingTask` | `inprogressTask` | `doneTask` — drives which inline buttons show in `package.json` menus.
+
+**Prompt templates** (`utils/templates.ts`): `requirementsPrompt()`, `designPrompt()`, and `tasksPrompt()` generate the three Claude prompts used in spec generation. This is the right place to tune generation quality or output format.
+
+**No test suite**: There are no unit or integration tests — `parseTasks` is exported for testing but nothing uses it yet.
 
 **CLAUDE.md guard** (`taskRunner.ts`): `guardClaudeMdSize` warns in Output Channel if the user's CLAUDE.md exceeds ~2000 tokens before injecting it into the task prompt.
 
