@@ -41,6 +41,7 @@ export async function runTask(item: TaskItem): Promise<void> {
     } catch { /* proceed without context */ }
 
     const claudeMd = await readClaudeMd(cwd);
+    const dotEnv = await loadDotEnv(cwd);
     const refs = parseRequirementsRefs(item.requirements ?? '');
     const prunedRequirements = pruneRequirements(requirements, refs);
     const tier = resolveTaskTier(item.label, item.details);
@@ -49,6 +50,9 @@ export async function runTask(item: TaskItem): Promise<void> {
     const channel = vscode.window.createOutputChannel(`Kosmo: ${item.label}`);
     channel.show(true);
     channel.appendLine(`▶ ${item.label} [${tier}] using ${adapter.label}`);
+    if (Object.keys(dotEnv).length > 0) {
+        channel.appendLine(`  env: loaded ${Object.keys(dotEnv).join(', ')} from .env`);
+    }
 
     guardClaudeMdSize(claudeMd, channel);
 
@@ -72,10 +76,12 @@ export async function runTask(item: TaskItem): Promise<void> {
     const modelArgs = resolveModelFlag(adapter.bin, tier);
     const args = [...adapter.args(prompt, 'task'), ...modelArgs];
 
+    const spawnEnv = { ...process.env, ...dotEnv };
+
     const proc = cp.spawn(
         adapter.bin,
         args,
-        { cwd, env: process.env, stdio: ['ignore', 'pipe', 'pipe'] }
+        { cwd, env: spawnEnv, stdio: ['ignore', 'pipe', 'pipe'] }
     );
     runningProcs.set(key, proc);
 
@@ -191,6 +197,28 @@ async function readClaudeMd(cwd: string): Promise<string> {
     } catch {
         return '';
     }
+}
+
+async function loadDotEnv(cwd: string): Promise<Record<string, string>> {
+    const vars: Record<string, string> = {};
+    try {
+        const raw = await fs.readFile(path.join(cwd, '.env'), 'utf8');
+        for (const line of raw.split('\n')) {
+            const trimmed = line.trim();
+            if (!trimmed || trimmed.startsWith('#')) continue;
+            const eq = trimmed.indexOf('=');
+            if (eq === -1) continue;
+            const key = trimmed.slice(0, eq).trim();
+            let value = trimmed.slice(eq + 1).trim();
+            // strip surrounding quotes
+            if ((value.startsWith('"') && value.endsWith('"')) ||
+                (value.startsWith("'") && value.endsWith("'"))) {
+                value = value.slice(1, -1);
+            }
+            if (key) vars[key] = value;
+        }
+    } catch { /* no .env file — that's fine */ }
+    return vars;
 }
 
 function guardClaudeMdSize(content: string, channel: vscode.OutputChannel): void {

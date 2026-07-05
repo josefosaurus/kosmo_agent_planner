@@ -77,7 +77,7 @@ Press **F5** in VSCode to launch Extension Development Host.
 
 ## Requirements pruning (`src/utils/contextPruner.ts`)
 
-Each task may have `  - _Requirements: 1.1, 1.2_`. `pruneRequirements(content, refs)` extracts only the referenced `### N.N` subsections from `requirements.md`, reducing prompt size. Falls back to full content if no refs match.
+Each task may have `  - _Requirements: 1.1, 1.2_`. `parseRequirementsRefs(line)` parses that annotation into `['1.1', '1.2']`. `pruneRequirements(content, refs)` extracts only the referenced `### N.N` subsections from `requirements.md`, reducing prompt size. Falls back to full content if no refs match.
 
 ## Key implementation details
 
@@ -93,7 +93,7 @@ Each task may have `  - _Requirements: 1.1, 1.2_`. `pruneRequirements(content, r
 
 **Prompt templates** (`utils/templates.ts`): `requirementsPrompt()`, `designPrompt()`, and `tasksPrompt()` generate the three Claude prompts used in spec generation. This is the right place to tune generation quality or output format.
 
-**No test suite**: There are no unit or integration tests — `parseTasks` is exported for testing but nothing uses it yet.
+**Test suite** (`src/test/suite.test.ts`): uses `node:test`. Covers `pruneRequirements`, `parseRequirementsRefs`, and `resolveTaskTier`. `parseTasks` is exported for testing but not yet covered.
 
 **CLAUDE.md guard** (`taskRunner.ts`): `guardClaudeMdSize` warns in Output Channel if the user's CLAUDE.md exceeds ~2000 tokens before injecting it into the task prompt.
 
