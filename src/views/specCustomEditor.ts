@@ -112,6 +112,8 @@ function buildHtml(
         ? `<button class="btn-primary" disabled>✓ Complete</button>`
         : `<button class="btn-primary" onclick="cont()">→ Continue</button>`;
 
+    const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
     const taskBarHtml = tasks.length > 0 ? (() => {
         const items = tasks.filter(t => t.state !== 'done').map(t => {
             const running = isRunning(t.tasksFilePath, t.taskIndex);
@@ -122,8 +124,6 @@ function buildHtml(
         }).join('');
         return items ? `<div class="task-bar">${items}</div>` : '';
     })() : '';
-
-    const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     const escaped = esc(content);
     const eyeIcon = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`;
 

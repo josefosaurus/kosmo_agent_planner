@@ -5,12 +5,13 @@ import { startTask } from './commands/startTask';
 import { TasksDataProvider, TaskItem, SpecGroupItem } from './views/tasksDataProvider';
 import { KosmoCodeLensProvider } from './providers/codelensProvider';
 import { killTask } from './services/taskRunner';
-import { selectCli } from './services/llmCli';
+import { selectCli, setExtensionPath } from './services/llmCli';
 import { discover } from './commands/discover';
 import { SpecToolbarPanel, specInfoFromUri } from './views/specToolbar';
 import { SpecCustomEditorProvider } from './views/specCustomEditor';
 
 export function activate(context: vscode.ExtensionContext) {
+    setExtensionPath(context.extensionPath);
     const tasksProvider = new TasksDataProvider();
 
     context.subscriptions.push(

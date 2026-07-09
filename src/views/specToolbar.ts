@@ -84,7 +84,8 @@ export class SpecToolbarPanel {
     static showExisting(info: SpecInfo): void {
         const p = SpecToolbarPanel.instance;
         if (!p) return;
-        if (p.state.phase === 'generating') return;
+        // Don't clobber an active review — user opened the file but Continue button must stay
+        if (p.state.phase === 'generating' || p.state.phase === 'review') return;
         p.specName = info.specName;
         p.specDir  = info.specDir;
         p.panel.title = `Kosmo · ${info.specName}`;
@@ -129,12 +130,19 @@ export class SpecToolbarPanel {
     private async onMessage(msg: { command: string; step?: StepKey; content?: string }): Promise<void> {
         if (msg.command === 'approve') {
             const current = this.state;
-            if (current.phase !== 'review') return;
+            if (current.phase !== 'review' && current.phase !== 'view') return;
             // persist user edits before generating next step
             if (msg.content !== undefined) {
                 await fs.writeFile(path.join(this.specDir, `${current.step}.md`), msg.content, 'utf8');
                 if (current.step === 'requirements') this.requirements = msg.content;
                 else if (current.step === 'design') this.design = msg.content;
+            }
+            // If design/requirements not loaded yet (view mode), read from disk
+            if (!this.requirements) {
+                try { this.requirements = await fs.readFile(path.join(this.specDir, 'requirements.md'), 'utf8'); } catch { /* ok */ }
+            }
+            if (!this.design && current.step !== 'requirements') {
+                try { this.design = await fs.readFile(path.join(this.specDir, 'design.md'), 'utf8'); } catch { /* ok */ }
             }
             const next = STEPS[STEPS.findIndex(s => s.key === current.step) + 1];
             if (next) void this.runStep(next.key);
@@ -211,6 +219,12 @@ export class SpecToolbarPanel {
             actionBtn = `<button class="btn-primary" disabled><span class="spin">◌</span> Generating…</button>`;
         } else if (s.phase === 'review') {
             actionBtn = `<button class="btn-primary" onclick="approve()">Continue <span style="opacity:.7">→</span></button>`;
+        } else if (s.phase === 'view') {
+            // Show Continue if there's a next step (requirements → design, design → tasks)
+            const nextStep = STEPS[currentIdx + 1];
+            if (nextStep) {
+                actionBtn = `<button class="btn-primary" onclick="approve()">Continue <span style="opacity:.7">→</span></button>`;
+            }
         } else if (s.phase === 'complete') {
             actionBtn = `<button class="btn-primary" disabled>✓ Complete</button>`;
         } else if (s.phase === 'error') {

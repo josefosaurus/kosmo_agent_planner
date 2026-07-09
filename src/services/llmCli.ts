@@ -1,5 +1,10 @@
 import * as cp from 'child_process';
+import * as os from 'os';
 import * as vscode from 'vscode';
+import { loadDotEnv } from '../utils/fileSystem';
+
+let _extensionPath: string | undefined;
+export function setExtensionPath(p: string): void { _extensionPath = p; }
 
 const CONFIG_KEY = 'kosmo.specCli';
 
@@ -206,11 +211,76 @@ const stripAnsi = (s: string) => s.replace(/\x1b\[[0-9;]*m/g, '');
 // CLIs that the user has granted trust for this session
 const sessionTrusted = new Set<string>();
 
-function spawnCli(cli: CliAdapter, args: string[], cwd: string): Promise<string & { exitCode?: number }> {
+/**
+ * Resolves ANTHROPIC_API_KEY in priority order:
+ * 1. workspace .env (passed as dotEnv)
+ * 2. extension directory .env
+ * 3. process.env (usually empty in VSCode extension host)
+ * 4. login shell env (reads ~/.zprofile, ~/.zshrc etc. via `zsh -l -c`)
+ * 5. VSCode input prompt (session-cached, never written to disk)
+ */
+let _cachedApiKey: string | undefined;
+export async function resolveAnthropicKey(dotEnv: Record<string, string> = {}): Promise<string | undefined> {
+    // 1. workspace .env
+    if (dotEnv['ANTHROPIC_API_KEY']) return dotEnv['ANTHROPIC_API_KEY'];
+
+    // 2. extension dir .env
+    if (_extensionPath) {
+        const extEnv = await loadDotEnv(_extensionPath);
+        if (extEnv['ANTHROPIC_API_KEY']) return extEnv['ANTHROPIC_API_KEY'];
+    }
+
+    // 3. process.env
+    if (process.env['ANTHROPIC_API_KEY']) return process.env['ANTHROPIC_API_KEY'];
+
+    // 4. cached from prompt
+    if (_cachedApiKey) return _cachedApiKey;
+
+    // 5. login shell — handles vars set in ~/.zprofile, ~/.zshrc, ~/.bash_profile
+    const shellKey = await readKeyFromLoginShell();
+    if (shellKey) return shellKey;
+
+    // 6. VSCode prompt
+    const input = await vscode.window.showInputBox({
+        title: 'Anthropic API Key required',
+        prompt: 'Not found in .env or shell env. Enter ANTHROPIC_API_KEY (session only, not saved to disk)',
+        password: true,
+        ignoreFocusOut: true,
+        validateInput: v => v.trim() ? undefined : 'API key cannot be empty',
+    });
+    if (input?.trim()) {
+        _cachedApiKey = input.trim();
+        return _cachedApiKey;
+    }
+    return undefined;
+}
+
+function readKeyFromLoginShell(): Promise<string | undefined> {
+    return new Promise(resolve => {
+        const shell = process.env['SHELL'] ?? '/bin/zsh';
+        const home = os.homedir();
+        // -l = login shell (sources profile files), -c = run command
+        const proc = cp.spawn(shell, ['-l', '-c', 'echo $ANTHROPIC_API_KEY'], {
+            env: { HOME: home, PATH: process.env['PATH'] ?? '/usr/local/bin:/usr/bin:/bin' },
+            stdio: ['ignore', 'pipe', 'ignore'],
+        });
+        let out = '';
+        proc.stdout.on('data', (chunk: Buffer) => { out += chunk.toString(); });
+        proc.on('close', () => {
+            const val = out.trim();
+            resolve(val && val !== '' ? val : undefined);
+        });
+        proc.on('error', () => resolve(undefined));
+        // Don't hang if shell is slow
+        setTimeout(() => { proc.kill(); resolve(undefined); }, 5000);
+    });
+}
+
+function spawnCli(cli: CliAdapter, args: string[], cwd: string, env?: NodeJS.ProcessEnv): Promise<string & { exitCode?: number }> {
     return new Promise((resolve, reject) => {
         out().appendLine(`[kosmo] $ ${cli.bin} ${args.map(a => a.length > 80 ? a.slice(0, 80) + '…' : a).join(' ')}`);
         out().appendLine(`[kosmo] cwd: ${cwd}`);
-        const proc = cp.spawn(cli.bin, args, { cwd, env: process.env, stdio: ['ignore', 'pipe', 'pipe'] });
+        const proc = cp.spawn(cli.bin, args, { cwd, env: env ?? process.env, stdio: ['ignore', 'pipe', 'pipe'] });
         let stdout = '';
         let stderr = '';
         proc.stdout.on('data', (chunk: Buffer) => { stdout += chunk.toString(); });
@@ -244,8 +314,13 @@ export async function runWithCli(prompt: string, cwd: string, tier?: ModelTier):
     const modelArgs = resolveModelFlag(cli.bin, tier ?? 'sonnet');
     const baseArgs = [...cli.args(finalPrompt, 'spec'), ...modelArgs];
 
+    const dotEnv = await loadDotEnv(cwd);
+    const apiKey = await resolveAnthropicKey(dotEnv);
+    if (!apiKey) throw new Error('ANTHROPIC_API_KEY not set — cannot run CLI.');
+    const spawnEnv: NodeJS.ProcessEnv = { ...process.env, ...dotEnv, ANTHROPIC_API_KEY: apiKey };
+
     try {
-        return await spawnCli(cli, baseArgs, cwd);
+        return await spawnCli(cli, baseArgs, cwd, spawnEnv);
     } catch (err) {
         const gate = cli.trustGate;
         const code  = (err as Error & { exitCode?: number }).exitCode;
@@ -263,7 +338,7 @@ export async function runWithCli(prompt: string, cwd: string, tier?: ModelTier):
                 sessionTrusted.add(cli.bin);
             }
             // Already trusted or just approved — retry with the permission args
-            return spawnCli(cli, [...baseArgs, ...gate.extraArgs], cwd);
+            return spawnCli(cli, [...baseArgs, ...gate.extraArgs], cwd, spawnEnv);
         }
 
         throw err;
